@@ -133,7 +133,7 @@ if __name__ == "__main__":
     availability_sheet = 'Availability'
     redundancy_sheet = 'Redundancy'
 
-    edges, enclosures, availabilities, redundancies = GraphStructure.parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet)
-    graph_structure = GraphStructure(edges, enclosures, availabilities, redundancies)
+    edges, enclosures, availabilities, redundancies, mttfs, mtrs = GraphStructure.parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet)
+    graph_structure = GraphStructure(edges, enclosures, availabilities, redundancies, mttfs, mtrs)
     interactive_graph = InteractiveGraph(graph_structure)
     plt.show()

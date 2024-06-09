@@ -2,7 +2,7 @@ import pandas as pd
 import networkx as nx
 
 class GraphStructure:
-    def __init__(self, edges, enclosures, availabilities, redundancies):
+    def __init__(self, edges, enclosures, availabilities, redundancies, mttfs, mtrs):
         self.G = nx.DiGraph()
         self.edges = edges
         self.enclosures = enclosures
@@ -11,6 +11,8 @@ class GraphStructure:
         self._add_edges()
         self._add_availabilities()
         self.redundancy_groups = self._create_redundancy_groups()
+        self.mttfs = mttfs
+        self.mtrs = mtrs
 
     def _add_edges(self):
         for start, end, weight in self.edges:
@@ -53,6 +55,7 @@ class GraphStructure:
         for module, (M, K) in self.redundancies.items():
             nodes = [node for node in self.G.nodes() if module in node]
             group_size = M + K
+            print (module, M, K)
             for i in range(0, len(nodes), group_size):
                 group = nodes[i:i + group_size]
                 group_name = f"{module}_group_{i // group_size}"
@@ -83,11 +86,14 @@ class GraphStructure:
             nodes = [str(df.iloc[i, enclosure_start_col + j]) for j in range(1, len(df.columns) - enclosure_start_col) if not pd.isna(df.iloc[i, enclosure_start_col + j])]
             enclosures[enclosure] = nodes
 
-        avail_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,E")
+        avail_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,C,D,E,F,G")
         availabilities = {str(row['module']): row['Availability'] for _, row in avail_df.iterrows()}
-
-        redundancy_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,F,G")
-        redundancies = {}
-        for _, row in redundancy_df.iterrows():
-            redundancies[str(row['module'])] = (int(row['M']), int(row['K']))
-        return edges, enclosures, availabilities, redundancies
+        mttfs = {str(row['module']): row['MTTF'] for _, row in avail_df.iterrows()}
+        mtrs = {str(row['module']): row['MTR'] for _, row in avail_df.iterrows()}
+        redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}
+        print (redundancies)
+        #redundancy_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,F,G")
+        #redundancies = {}
+        #for _, row in redundancy_df.iterrows():
+        #    redundancies[str(row['module'])] = (int(row['M']), int(row['K']))
+        return edges, enclosures, availabilities, redundancies, mttfs, mtrs

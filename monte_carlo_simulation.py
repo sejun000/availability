@@ -110,14 +110,13 @@ if __name__ == "__main__":
     start_cell = ('B', 2)  # Corresponds to cell B2
     enclosure_start_cell = ('F', 2)  # Corresponds to cell F2
     availability_sheet = 'Availability'
-    num_simulations = 10000
-    time_period = 10 * 365 * 24 * 60 * 60  # 10 years in seconds
+    redundancy_sheet = 'Redundancy'
 
-    edges, enclosures, availabilities, mttfs, mtrs = GraphStructure.parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet)
-    graph_structure = GraphStructure(edges, enclosures, availabilities)
-    graph_structure.mttfs = mttfs
-    graph_structure.mtrs = mtrs
-
+    edges, enclosures, availabilities, redundancies, mttfs, mtrs = GraphStructure.parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet)
+    graph_structure = GraphStructure(edges, enclosures, availabilities, redundancies, mttfs, mtrs)
+    print (graph_structure.mttfs, graph_structure.mtrs)
+    num_simulations = 1
+    time_period = 5 * 365 * 24 
     results = monte_carlo_simulation(graph_structure, num_simulations, time_period)
 
     with open("monte_carlo.output", "w") as f:
