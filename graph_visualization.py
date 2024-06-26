@@ -11,7 +11,8 @@ class InteractiveGraph:
         self.enclosures = graph_structure.enclosures
         self.redundancies = graph_structure.redundancies
         self.redundancy_groups = graph_structure.redundancy_groups
-        self.pos = graphviz_layout(self.G, prog='dot')
+        self.pos = graphviz_layout(self.G, prog='dot', args='-Goverlap=scale -Gnodesep=22 -Gpad=5')
+        self.selected_node = None
         self.selected_node = None
         self.fig, self.ax = plt.subplots()
         self.annotation = self.ax.annotate(
@@ -35,7 +36,7 @@ class InteractiveGraph:
         y_center = (max(y_coords) + min(y_coords)) / 2
 
         for node in pos:
-            pos[node] = (pos[node][0] - x_center, pos[node][1] - y_center)
+            pos[node] = (pos[node][0] * 8 - x_center, pos[node][1] * 8 - y_center)
         
         self.pos = pos
 
@@ -44,8 +45,8 @@ class InteractiveGraph:
         edge_colors = ['red' if weight.endswith('G') else 'blue' for _, _, weight in self.edges]
         edge_weights = [self.G[u][v]['capacity'] / 10**9 for u, v in self.G.edges()]  # Adjust the edge weight for better visualization
 
-        nx.draw(self.G, pos=self.pos, with_labels=True, node_color='skyblue', node_size=3000, 
-                edge_color=edge_colors, width=[w / 10 for w in edge_weights], font_size=15, font_weight='bold', 
+        nx.draw(self.G, pos=self.pos, with_labels=True, node_color='skyblue', node_size=100, 
+                edge_color=edge_colors, width=[w / 10 for w in edge_weights], font_size=5, font_weight='bold', 
                 arrows=True, ax=self.ax)
 
         # Draw edge labels (capacities)
@@ -72,10 +73,11 @@ class InteractiveGraph:
                 # Make the box larger to fully contain the nodes
                 padding = 22 # Increased padding for larger box
                 self.ax.add_patch(Rectangle((x_min-padding, y_min-padding), x_max-x_min+2*padding, y_max-y_min+2*padding, fill=True, color=colors[idx % len(colors)], alpha=0.3))
-                self.ax.text((x_min + x_max) / 2, y_min - padding, enclosure, horizontalalignment='center', verticalalignment='top', fontsize=12, color='black', bbox=dict(facecolor='white', alpha=0.6))
+                self.ax.text((x_min + x_max) / 2, y_min - padding, enclosure, horizontalalignment='center', verticalalignment='top', fontsize=9, color='black', bbox=dict(facecolor='white', alpha=0.6))
 
     def draw_redundancy_groups(self):
-        for group_name, nodes in self.redundancy_groups.items():
+        for group_name, (nodes, M) in self.redundancy_groups.items():
+            print (group_name, (nodes, M))
             x_coords = [self.pos[node][0] for node in nodes if node in self.pos]
             y_coords = [self.pos[node][1] for node in nodes if node in self.pos]
             if x_coords and y_coords:

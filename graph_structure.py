@@ -55,9 +55,9 @@ class GraphStructure:
         for module, (M, K) in self.redundancies.items():
             nodes = [node for node in self.G.nodes() if module in node]
             group_size = M + K
-            print (module, M, K)
+            #print (module, M, K)
             for i in range(0, len(nodes), group_size):
-                group = nodes[i:i + group_size]
+                group = (nodes[i:i + group_size], M)
                 group_name = f"{module}_group_{i // group_size}"
                 groups[group_name] = group
         return groups
@@ -91,7 +91,7 @@ class GraphStructure:
         mttfs = {str(row['module']): row['MTTF'] for _, row in avail_df.iterrows()}
         mtrs = {str(row['module']): row['MTR'] for _, row in avail_df.iterrows()}
         redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}
-        print (redundancies)
+        #print (redundancies)
         #redundancy_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,F,G")
         #redundancies = {}
         #for _, row in redundancy_df.iterrows():
