@@ -44,7 +44,7 @@ class GraphStructure:
         for node in self.G.nodes():
             if "switch" in node:
                 self.G.add_edge('virtual_source', node, capacity=float('inf'))
-            if "dfm" in node:
+            if "ssd" in node:
                 self.G.add_edge(node, 'virtual_sink', capacity=float('inf'))
 
     def remove_virtual_nodes(self):
