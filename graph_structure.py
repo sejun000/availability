@@ -3,7 +3,7 @@ import networkx as nx
 from networkx.algorithms.flow import preflow_push
 
 class GraphStructure:
-    def __init__(self, edges, enclosures, availabilities, redundancies, mttfs, mtrs):
+    def __init__(self, edges, enclosures, availabilities, redundancies, mttfs, mtrs, network_level_M = 1, network_level_K = 1):
         self.G = nx.DiGraph()
         self.edges = edges
         self.enclosures = enclosures
@@ -11,7 +11,7 @@ class GraphStructure:
         self.redundancies = redundancies
         self._add_edges()
         self._add_availabilities()
-        self.redundancy_groups = self._create_redundancy_groups()
+        self.redundancy_groups = self._create_redundancy_groups(network_level_M, network_level_K)
         self.mttfs = mttfs
         self.mtrs = mtrs
 
@@ -51,16 +51,25 @@ class GraphStructure:
     def remove_virtual_nodes(self):
         self.G.remove_node('virtual_source')
         self.G.remove_node('virtual_sink')
-    def _create_redundancy_groups(self):
+    def _create_redundancy_groups(self, network_level_K, network_level_M):
         groups = {}
         for module, (M, K) in self.redundancies.items():
             nodes = [node for node in self.G.nodes() if module in node]
             group_size = M + K
-            #print (module, M, K)
             for i in range(0, len(nodes), group_size):
                 group = (nodes[i:i + group_size], M)
                 group_name = f"{module}_group_{i // group_size}"
                 groups[group_name] = group
+            if ("ssd" in module):
+                network_group_size = network_level_M + network_level_K
+                for i in range(0, len(nodes) // network_group_size):
+                    ssds_per_network_group = []
+                    # ssd0, ssd 31 is same network group
+                    for j in range(0, network_group_size):
+                        ssds_per_network_group.append(nodes[i + j * len(nodes) // network_group_size])
+                    group = (ssds_per_network_group, network_level_M)
+                    group_name = f"network_level_group_{i // network_group_size}"
+                    groups[group_name] = group
             if (len(nodes) == 0): # if there are no nodes in the module, check enclosures
                 group_size = M + K
                 nodes = [enclosure for enclosure in self.enclosures if module in enclosure]
@@ -101,9 +110,5 @@ class GraphStructure:
         mttfs = {str(row['module']): row['MTTF'] for _, row in avail_df.iterrows()}
         mtrs = {str(row['module']): row['MTR'] for _, row in avail_df.iterrows()}
         redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}
-        #print (redundancies)
-        #redundancy_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,F,G")
-        #redundancies = {}
-        #for _, row in redundancy_df.iterrows():
-        #    redundancies[str(row['module'])] = (int(row['M']), int(row['K']))
+        print (redundancies)     
         return edges, enclosures, availabilities, redundancies, mttfs, mtrs

@@ -10,6 +10,8 @@ import multiprocessing
 import itertools
 import time
 from collections import OrderedDict
+from enum import Enum, auto
+import heapq
 
 num_simulations = 4000000
 time_period = 20 * 365 * 24
@@ -20,9 +22,25 @@ enclosure_start_cell = ('F', 2)  # Corresponds to cell F2
 availability_sheet = 'Availability'
 redundancy_sheet = 'Redundancy'
 
+"""
+
+class RebuildType():
+    def __init__(self):
+        DONT_REBUILD_SSD = 0
+        LOCAL_REBUILD = 1
+        NETWORK_REBUILD = 2
+        EXTERNAL_REBUILD = 3
+        rebuild_type = DONT_REBUILD_SSD
+    def set_rebuild_type(self, rebuild_type):
+        # if more severe rebuild type is requested, update the rebuild type
+        if (self.rebuild_type < rebuild_type):
+            self.rebuild_type = rebuild_type
+"""
+
 def _calculate_max_flow(graph_structure, current_failures, key):
     global max_flow_table
     graph_structure = copy.deepcopy(graph_structure_origin)
+    failed_ssd = dict()
     for group_name, num_failures in current_failures.items():
         nodes, M = graph_structure.redundancy_groups[group_name]
         for node in nodes[:num_failures]:
@@ -33,11 +51,65 @@ def _calculate_max_flow(graph_structure, current_failures, key):
                 for modules_node in graph_structure.enclosures[node]:
                     if (modules_node in graph_structure.G.nodes()):
                         graph_structure.G.remove_node(modules_node)
-
+    """
+    for group_name, num_failures in current_failures.items():
+        if ("ssd" in group_name):
+            nodes, M = graph_structure.redundancy_groups[group_name]
+            # locally recoverable
+            if (len(nodes) - M < num_failures):
+                for node in nodes[num_failures:len(nodes)]:
+                    failure_ssd[node] = group_name
+            for node in nodes[num_failures:len(nodes)]:
+                failure_ssd[node] = group_name
+    """
     flow = graph_structure.calculate_max_flow()
     
     global max_flow_table
     max_flow_table[key] = flow
+
+def is_enclosure(node):
+    return node[0].isupper()
+
+def generate_failure_events(graph_structure, time_period):
+    events = []
+    for node in list(graph_structure.G.nodes()):
+        matched_module = None
+        for module in graph_structure.mttfs.keys():
+            if module in node:
+                matched_module = module
+                break
+        current_time = 0
+        if matched_module:
+            while (current_time < time_period):
+                mttf = graph_structure.mttfs[matched_module]
+                mtr = graph_structure.mtrs[matched_module]
+                failure_time = current_time + random.expovariate(1 / mttf)
+                repair_time = failure_time + random.expovariate(1 / mtr)
+                #print (matched_module, node, mttf, mtr, current_time, failure_time, repair_time)
+                heapq.heappush(events, (failure_time, 'fail', node))
+                heapq.heappush(events, (repair_time, 'repair', node))
+                current_time = repair_time
+    # Generate enclosure failure and repair events
+    for enclosure in list(graph_structure.enclosures):
+        matched_module = None
+        for module in graph_structure.mttfs.keys():
+            if module in enclosure:
+                matched_module = module
+                break
+        current_time = 0
+        if matched_module:
+            while (current_time < time_period):
+                mttf = graph_structure.mttfs[matched_module]
+                mtr = graph_structure.mtrs[matched_module]
+                failure_time = current_time + random.expovariate(1 / mttf)
+                repair_time = failure_time + random.expovariate(1 / mtr)
+                #print (matched_module, node, mttf, mtr, current_time, failure_time, repair_time)
+                # failure all node in the enclosure
+                for node in enclosure:
+                    heapq.heappush(events, (failure_time, 'fail', node))
+                    heapq.heappush(events, (repair_time, 'repair', node))
+                    current_time = repair_time
+    return events
 
 def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
     total_up_time = 0
@@ -64,58 +136,14 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
         current_failures = OrderedDict()
         for group_name, (nodes, M) in graph_structure.redundancy_groups.items():
             current_failures[group_name] = 0
-
         # Generate failure and repair events
-        for node in list(graph_structure.G.nodes()):
-            matched_module = None
-            for module in graph_structure.mttfs.keys():
-                if module in node:
-                    matched_module = module
-                    break
-            current_time = 0
-            if matched_module:
-                while (current_time < time_period):
-                    mttf = graph_structure.mttfs[matched_module]
-                    mtr = graph_structure.mtrs[matched_module]
-                    failure_time = current_time + random.expovariate(1 / mttf)
-                    repair_time = failure_time + random.expovariate(1 / mtr)
-                    #print (matched_module, node, mttf, mtr, current_time, failure_time, repair_time)
-                    events.append((failure_time, 'fail', node))
-                    events.append((repair_time, 'repair', node))
-                    current_time = repair_time
-
-        # Generate enclosure failure and repair events
-        for enclosure in list(graph_structure.enclosures):
-            matched_module = None
-            for module in graph_structure.mttfs.keys():
-                if module in enclosure:
-                    matched_module = module
-                    break
-            current_time = 0
-            if matched_module:
-                while (current_time < time_period):
-                    mttf = graph_structure.mttfs[matched_module]
-                    mtr = graph_structure.mtrs[matched_module]
-                    failure_time = current_time + random.expovariate(1 / mttf)
-                    repair_time = failure_time + random.expovariate(1 / mtr)
-                    #print (matched_module, node, mttf, mtr, current_time, failure_time, repair_time)
-                    for node in enclosure:
-                        events.append((failure_time, 'fail', node))
-                        events.append((repair_time, 'repair', node))
-                        current_time = repair_time
-        # Sort events by time
-        events.sort()
-        #for time, event, node in events:
-        #    print (time, event, node)
+        events = generate_failure_events(graph_structure, time_period)
         current_time = 0
+        prev_time = 0
         # Process events
-        for idx, event in enumerate(events):
-            #print (event)
-            event_time, event_type, event_node = event
+        while(1):
+            event_time, event_type, event_node = heapq.heappop(events)
             # Calculate the time difference from the previous event
-            prev_time = 0
-            if idx > 0:
-                prev_time = events[idx - 1][0]
             break_flag = False
             if (event_time > time_period):
                 event_time = time_period
@@ -149,21 +177,24 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
             if (break_flag == True):
                 break
 
-            # Update current time
-            current_time = event_time
-
             # Handle the event
             if event_type == 'fail':
+                if (event_node in failed_node):
+                    failed_node[event_node] += 1
+                else: # newly failed node
+                    failed_node[event_node] = 1
                 for group_name, (nodes, M) in graph_structure.redundancy_groups.items():
                     #print (nodes)
                     if event_node in nodes:
                         current_failures[group_name] += 1
-                failed_node[event_node] = 1
             elif event_type == 'repair' and event_node in failed_node:
-                for group_name, (nodes, M) in graph_structure.redundancy_groups.items():
-                    if event_node in nodes:
-                        current_failures[group_name] -= 1
-                del failed_node[event_node]
+                failed_node[event_node] -= 1
+                if failed_node[event_node] == 0:
+                    for group_name, (nodes, M) in graph_structure.redundancy_groups.items():
+                        if event_node in nodes:
+                            current_failures[group_name] -= 1
+                    del failed_node[event_node]
+            prev_time = event_time
         # Calculate the availability
         availability = up_time / (up_time + down_time)
         total_up_time += up_time
@@ -173,59 +204,12 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
         #if (completed % 10000 == 0):
         if (simulation_idx == 0 and (completed * 1000) % batch_size == 0):
             print ("completed "+ str(completed / batch_size * 100) + "%")
-    #    results.append((up_time, down_time, availability))
-        # Print progress to standard output
-        #print(f"Simulation {simulation_idx+1} completed. Total period: {time_period}, Up Time: {up_time}, Down Time: {down_time}, Availability: {availability:.8f}, MinFlow : {max_flow}")
     queue.put((total_up_time, total_down_time, total_effective_up_time))
     return ""
 
-def is_enclosure(node):
-    return node[0].isupper()
-
-redundancy_group_dependency = []
-def explore_failures_recursive(graph_structure_origin, groups, current_group_index=0):
-    group_name, (nodes, M) = groups[current_group_index]
-    N = len(nodes)
-    global current_failures
-    global partial_failure_mark
-    global cnt
-    for num_failures in range(N - M + 1):
-       # print (num_failures, group_name)
-        current_failures[group_name] = num_failures
-        if current_group_index == len(groups) - 1:
-            # Calculate the flow for the current configuration
-            
-            graph_structure = copy.deepcopy(graph_structure_origin)
-            for group_name, num_failures in current_failures.items():
-                nodes, M = graph_structure.redundancy_groups[group_name]
-                for node in nodes[:num_failures]:
-                    if (node in graph_structure.G.nodes()):
-                        graph_structure.G.remove_node(node)
-                    # if first character of node is capital, it is enclosure
-                    if (is_enclosure(node)):
-                        for modules_node in graph_structure.enclosures[node]:
-                            if (modules_node in graph_structure.G.nodes()):
-                                graph_structure.G.remove_node(modules_node)
-
-            flow = graph_structure.calculate_max_flow()
-            
-            global max_flow_table
-            key = frozenset(current_failures.items())
-        #    print (key)
-            max_flow_table[key] = flow
-        else:
-            explore_failures_recursive(graph_structure_origin, groups, current_group_index + 1)
-
-def initial_computation(graph_structure_origin):
+def initial_computation(graph_structure):
     global max_bw
-    max_bw = graph_structure_origin.calculate_max_flow()
-    graph_structure = copy.deepcopy(graph_structure_origin)
-    groups = list(graph_structure.redundancy_groups.items())
-    start_time = time.time()
-   # explore_failures_recursive(graph_structure, groups)
-    end_time = time.time()
-    print ("elapsed time : ", end_time - start_time)
-
+    max_bw = graph_structure.calculate_max_flow()
 
 if __name__ == "__main__":
     lock = threading.Lock()
@@ -236,10 +220,7 @@ if __name__ == "__main__":
 
     edges, enclosures, availabilities, redundancies, mttfs, mtrs = GraphStructure.parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet)
     graph_structure_origin = GraphStructure(edges, enclosures, availabilities, redundancies, mttfs, mtrs)
-    # Initial computation
-    print ("Initial computation....")
     initial_computation(graph_structure_origin)
-
     # Reset the current failures
     current_failures = OrderedDict()
     # Determine the number of CPU cores
@@ -276,6 +257,3 @@ if __name__ == "__main__":
     print ("Total Effective Up Time : ", total_effective_up_time)
     print ("Availability : ", total_up_time / (total_up_time + total_down_time))
     print ("Effective Availability : ", total_effective_up_time / (total_up_time + total_down_time))
-    #with open("monte_carlo.output", "w") as f:
-    #    for up_time, down_time, availability in results:
-    #        f.write(f"Up Time: {up_time}, Down Time: {down_time}, Availability: {availability:.8f}\n")
