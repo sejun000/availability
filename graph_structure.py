@@ -1,5 +1,6 @@
 import pandas as pd
 import networkx as nx
+from networkx.algorithms.flow import preflow_push
 
 class GraphStructure:
     def __init__(self, edges, enclosures, availabilities, redundancies, mttfs, mtrs):
@@ -34,7 +35,7 @@ class GraphStructure:
 
     def calculate_max_flow(self):
         self.add_virtual_nodes()
-        flow_value, flow_dict = nx.maximum_flow(self.G, 'virtual_source', 'virtual_sink')
+        flow_value, flow_dict = nx.maximum_flow(self.G, 'virtual_source', 'virtual_sink', flow_func=preflow_push)
         self.remove_virtual_nodes()
         return flow_value
 
@@ -60,6 +61,15 @@ class GraphStructure:
                 group = (nodes[i:i + group_size], M)
                 group_name = f"{module}_group_{i // group_size}"
                 groups[group_name] = group
+            if (len(nodes) == 0): # if there are no nodes in the module, check enclosures
+                group_size = M + K
+                nodes = [enclosure for enclosure in self.enclosures if module in enclosure]
+                print (nodes)
+                for i in range(0, len(nodes), group_size):
+                    group = (nodes[i:i + group_size], M)
+                    group_name = f"{module}_group_{i // group_size}"
+                    groups[group_name] = group
+        #print (groups)
         return groups
     @staticmethod
     def parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet):
