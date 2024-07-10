@@ -70,46 +70,56 @@ def _calculate_max_flow(graph_structure, current_failures, key):
 def is_enclosure(node):
     return node[0].isupper()
 
-def generate_failure_events(graph_structure, time_period):
+def generate_first_failure_events(graph_structure, time_period, matched_module):
     events = []
     for node in list(graph_structure.G.nodes()):
-        matched_module = None
-        for module in graph_structure.mttfs.keys():
-            if module in node:
-                matched_module = module
-                break
-        current_time = 0
-        if matched_module:
-            while (current_time < time_period):
-                mttf = graph_structure.mttfs[matched_module]
-                mtr = graph_structure.mtrs[matched_module]
-                failure_time = current_time + random.expovariate(1 / mttf)
-                repair_time = failure_time + random.expovariate(1 / mtr)
-                #print (matched_module, node, mttf, mtr, current_time, failure_time, repair_time)
-                heapq.heappush(events, (failure_time, 'fail', node))
-                heapq.heappush(events, (repair_time, 'repair', node))
-                current_time = repair_time
+        module = matched_module[node]
+        if module:
+            # generate only once
+            mttf = graph_structure.mttfs[module]
+            mtr = graph_structure.mtrs[module]
+            failure_time = random.expovariate(1 / mttf)
+            #print (module, node, mttf, mtr, current_time, failure_time, repair_time)
+            heapq.heappush(events, (failure_time, 'fail', node))
     # Generate enclosure failure and repair events
     for enclosure in list(graph_structure.enclosures):
-        matched_module = None
-        for module in graph_structure.mttfs.keys():
-            if module in enclosure:
-                matched_module = module
-                break
-        current_time = 0
-        if matched_module:
-            while (current_time < time_period):
-                mttf = graph_structure.mttfs[matched_module]
-                mtr = graph_structure.mtrs[matched_module]
-                failure_time = current_time + random.expovariate(1 / mttf)
-                repair_time = failure_time + random.expovariate(1 / mtr)
-                #print (matched_module, node, mttf, mtr, current_time, failure_time, repair_time)
-                # failure all node in the enclosure
-                for node in enclosure:
-                    heapq.heappush(events, (failure_time, 'fail', node))
-                    heapq.heappush(events, (repair_time, 'repair', node))
-                    current_time = repair_time
+        module = matched_module[enclosure]
+        if module:
+            mttf = graph_structure.mttfs[module]
+            mtr = graph_structure.mtrs[module]
+            failure_time = random.expovariate(1 / mttf)
+            #print (module, node, mttf, mtr, current_time, failure_time, repair_time)
+            # failure all node in the enclosure
+            heapq.heappush(events, (failure_time, 'fail', enclosure))
+            #print (enclosure)
     return events
+
+def push_repair_event(repair_events, event_node, current_time, matched_module, graph_structure):
+    #print (event_node, current_time)
+    module = matched_module[event_node]
+    mtr = graph_structure.mtrs[module]
+    repair_time = current_time + random.expovariate(1 / mtr)
+    heapq.heappush(repair_events, (repair_time, 'repair', event_node))
+
+def push_failed_event(failed_events, event_node, current_time, matched_module, graph_structure):
+    module = matched_module[event_node]
+    mttf = graph_structure.mttfs[module]
+    failure_time = current_time + random.expovariate(1 / mttf)
+    heapq.heappush(failed_events, (failure_time, 'fail', event_node))
+
+def pop_event(events, repair_events):
+    if (len(repair_events) > 0 and len(events) == 0):
+        popped_event = heapq.heappop(repair_events)
+    elif (len(repair_events) == 0 and len(events) > 0):
+        popped_event = heapq.heappop(events)
+    else:
+        repair_event = repair_events[0]
+        event = events[0]
+        if (repair_event[0] < event[0]):
+            popped_event = heapq.heappop(repair_events)
+        else:
+            popped_event = heapq.heappop(events)
+    return popped_event
 
 def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
     total_up_time = 0
@@ -120,6 +130,19 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
     global completed
     global num_simulations
     graph_structure = copy.deepcopy(graph_structure_origin)
+
+    matched_module = {}
+    for enclosure in list(graph_structure.enclosures):
+        for module in graph_structure.mttfs.keys():
+            if module in enclosure:
+                matched_module[enclosure] = module
+                break
+    for node in list(graph_structure.G.nodes()):
+        for module in graph_structure.mttfs.keys():
+            if module in node:
+                matched_module[node] = module
+                break
+
     for local_simul in range(0, batch_size):
         # when you add / delete graph, you need to copy here
         """
@@ -129,7 +152,8 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
         effective_up_time = 0
         down_time = 0
         current_time = 0
-        events = []
+        failed_events = []
+        repair_events = []
         removed_in_edges = {}
         removed_out_edges = {}
         failed_node = {}
@@ -137,12 +161,12 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
         for group_name, (nodes, M) in graph_structure.redundancy_groups.items():
             current_failures[group_name] = 0
         # Generate failure and repair events
-        events = generate_failure_events(graph_structure, time_period)
+        failed_events = generate_first_failure_events(graph_structure, time_period, matched_module)
         current_time = 0
         prev_time = 0
         # Process events
-        while(1):
-            event_time, event_type, event_node = heapq.heappop(events)
+        while(1):    
+            event_time, event_type, event_node = pop_event(failed_events, repair_events)
             # Calculate the time difference from the previous event
             break_flag = False
             if (event_time > time_period):
@@ -194,6 +218,11 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
                         if event_node in nodes:
                             current_failures[group_name] -= 1
                     del failed_node[event_node]
+            # Push the next repair event
+            if event_type == 'fail':
+                push_repair_event(repair_events, event_node, event_time, matched_module, graph_structure)
+            if event_type == 'repair':
+                push_failed_event(failed_events, event_node, event_time, matched_module, graph_structure)
             prev_time = event_time
         # Calculate the availability
         availability = up_time / (up_time + down_time)
