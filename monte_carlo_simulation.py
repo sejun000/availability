@@ -15,6 +15,8 @@ import heapq
 
 num_simulations = 4000000
 time_period = 20 * 365 * 24
+SSD_capacity = 1_000_000_000_000
+SSD_speed = 200_000_000
 file_path = 'availability.xlsx'
 sheet_name = 'HW Architecture'
 start_cell = ('B', 2)  # Corresponds to cell B2
@@ -37,20 +39,29 @@ class RebuildType():
             self.rebuild_type = rebuild_type
 """
 
-def _calculate_max_flow(graph_structure, current_failures, key):
+def _calculate_max_flow(graph_structure_origin, current_failures, key):
     global max_flow_table
     graph_structure = copy.deepcopy(graph_structure_origin)
     failed_ssd = dict()
     for group_name, num_failures in current_failures.items():
         nodes, M = graph_structure.redundancy_groups[group_name]
-        for node in nodes[:num_failures]:
-            if (node in graph_structure.G.nodes()):
-                graph_structure.G.remove_node(node)
-            # if first character of node is capital, it is enclosure
-            if (is_enclosure(node)):
-                for modules_node in graph_structure.enclosures[node]:
-                    if (modules_node in graph_structure.G.nodes()):
-                        graph_structure.G.remove_node(modules_node)
+        
+        if ("ssd" in group_name and len(nodes) - M >= num_failures and num_failures > 0):
+            for node in nodes:
+                # all group shall be 80% 
+                if (node in graph_structure.G.nodes()):
+                    for u, v, edge_data in graph_structure.G.in_edges(node, data=True):
+                        if 'capacity' in graph_structure.G[u][v]:
+                            graph_structure.G[u][v]['capacity'] *= 0.8
+        else:
+            for node in nodes[:num_failures]:
+                if (node in graph_structure.G.nodes()):
+                    graph_structure.G.remove_node(node)
+                # if first character of node is capital, it is enclosure
+                if (is_enclosure(node)):
+                    for modules_node in graph_structure.enclosures[node]:
+                        if (modules_node in graph_structure.G.nodes()):
+                            graph_structure.G.remove_node(modules_node)
     """
     for group_name, num_failures in current_failures.items():
         if ("ssd" in group_name):
@@ -98,7 +109,11 @@ def push_repair_event(repair_events, event_node, current_time, matched_module, g
     #print (event_node, current_time)
     module = matched_module[event_node]
     mtr = graph_structure.mtrs[module]
-    repair_time = current_time + random.expovariate(1 / mtr)
+    if ("ssd" in module):
+        repair_time = current_time + random.expovariate(1 / (SSD_capacity / (SSD_speed * 0.2) / 3600.0))
+    else:
+        repair_time = current_time + random.expovariate(1 / mtr)
+        #print (repair_time)
     heapq.heappush(repair_events, (repair_time, 'repair', event_node))
 
 def push_failed_event(failed_events, event_node, current_time, matched_module, graph_structure):
@@ -132,6 +147,7 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
     graph_structure = copy.deepcopy(graph_structure_origin)
 
     matched_module = {}
+    SSDs = {}
     for enclosure in list(graph_structure.enclosures):
         for module in graph_structure.mttfs.keys():
             if module in enclosure:
@@ -142,6 +158,12 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
             if module in node:
                 matched_module[node] = module
                 break
+    for node in list(graph_structure.G.nodes()):
+        if "ssd" in node:
+            # speed and capacity
+            # if SSDs[node][0] is less than SSD_speed, some rebuild process happens
+            # if SSDs[node][1] is less than SSD_capacity, some rebuild process happens (0 means not rebuilded SSD)
+            SSDs[node] = (SSD_speed, SSD_capacity)
 
     for local_simul in range(0, batch_size):
         # when you add / delete graph, you need to copy here
