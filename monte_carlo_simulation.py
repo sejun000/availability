@@ -38,12 +38,18 @@ class RebuildType():
         if (self.rebuild_type < rebuild_type):
             self.rebuild_type = rebuild_type
 """
-
+event_counter = 0
 def _calculate_max_flow(graph_structure_origin, current_failures, key):
     global max_flow_table
+    global max_flow_for_rebuild_table
+    global odd_even_counter
     graph_structure = copy.deepcopy(graph_structure_origin)
-    failed_ssd = dict()
+    rebuilding_flow = dict() # group to rebuild bandwidth mapping
+    ssd_under_rebuilding = dict()
+    # configure edge's capacity except network_level rebuild case
     for group_name, num_failures in current_failures.items():
+        if ("network_level" in group_name):
+            continue
         nodes, M = graph_structure.redundancy_groups[group_name]
         
         if ("ssd" in group_name and len(nodes) - M >= num_failures and num_failures > 0):
@@ -52,7 +58,9 @@ def _calculate_max_flow(graph_structure_origin, current_failures, key):
                 if (node in graph_structure.G.nodes()):
                     for u, v, edge_data in graph_structure.G.in_edges(node, data=True):
                         if 'capacity' in graph_structure.G[u][v]:
+                            rebuilding_flow[group_name] = 0.2 * graph_structure.G[u][v]['capacity']
                             graph_structure.G[u][v]['capacity'] *= 0.8
+                            ssd_under_rebuilding[node] = 1
         else:
             for node in nodes[:num_failures]:
                 if (node in graph_structure.G.nodes()):
@@ -62,21 +70,33 @@ def _calculate_max_flow(graph_structure_origin, current_failures, key):
                     for modules_node in graph_structure.enclosures[node]:
                         if (modules_node in graph_structure.G.nodes()):
                             graph_structure.G.remove_node(modules_node)
+    # if network level rebuilding is necessary, get maximum flow
     """
     for group_name, num_failures in current_failures.items():
-        if ("ssd" in group_name):
+        if ("network_level" in group_name and len(nodes) - M >= num_failures and num_failures > 0):
             nodes, M = graph_structure.redundancy_groups[group_name]
-            # locally recoverable
-            if (len(nodes) - M < num_failures):
-                for node in nodes[num_failures:len(nodes)]:
-                    failure_ssd[node] = group_name
-            for node in nodes[num_failures:len(nodes)]:
-                failure_ssd[node] = group_name
+            for node in nodes:
+                # it can be already rebuild with local rebuild, ignore, and just rebuild with local rebuild
+                if node in ssd_under_rebuilding:
+                    break
+                # event_counter is change switch to be used in rebuilding
+                flow_value, flow_dict = nx.maximum_flow(graph_structure.G, "switch" + str((event_counter % 2)), node)
+                event_counter += 1
+                for u in flow_dict:
+                    for v, flow in flow_dict[u].items():
+                        if flow > 0:
+                            rebuilding_flow_each = min(flow_value * 0.2, graph_structure.G[u][v]['capacity'])
+                            if (rebuilding_flow_each == 0):
+                                # set very small value. This value can be changed when states (current_failures) are changed
+                                rebuilding_flow_each = 0.000000001
+                            rebuilding_flow[group_name] = rebuilding_flow_each
+                            graph_structure.G[u][v]['capacity'] -= rebuilding_flow_each
     """
     flow = graph_structure.calculate_max_flow()
     
     global max_flow_table
     max_flow_table[key] = flow
+    max_flow_for_rebuild_table[key] = rebuilding_flow
 
 def is_enclosure(node):
     return node[0].isupper()
@@ -105,12 +125,23 @@ def generate_first_failure_events(graph_structure, time_period, matched_module):
             #print (enclosure)
     return events
 
-def push_repair_event(repair_events, event_node, current_time, matched_module, graph_structure):
+def push_repair_event(repair_events, event_node, current_time, matched_module, matched_group, graph_structure, key):
+    global max_flow_for_rebuild_table
     #print (event_node, current_time)
     module = matched_module[event_node]
     mtr = graph_structure.mtrs[module]
     if ("ssd" in module):
-        repair_time = current_time + random.expovariate(1 / (SSD_capacity / (SSD_speed * 0.2) / 3600.0))
+        group = matched_group[event_node]
+      #  print (group, max_flow_for_rebuild_table)
+        if (key in max_flow_for_rebuild_table):
+            if (group in max_flow_for_rebuild_table[key]):
+                rebuild_bandwidth = max_flow_for_rebuild_table[key][group]
+                repair_time = current_time + random.expovariate(1 / (SSD_capacity / rebuild_bandwidth / 3600.0))
+            else:
+                # rebuild is not possible, data loss, so, we just switch SSDs
+                repair_time = current_time + random.expovariate(1 / (SSD_capacity / (SSD_speed * 0.2) / 3600.0))
+            print (key)
+            assert False    
     else:
         repair_time = current_time + random.expovariate(1 / mtr)
         #print (repair_time)
@@ -147,6 +178,8 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
     graph_structure = copy.deepcopy(graph_structure_origin)
 
     matched_module = {}
+    matched_group = {}
+    matched_network_group = {}
     SSDs = {}
     for enclosure in list(graph_structure.enclosures):
         for module in graph_structure.mttfs.keys():
@@ -158,6 +191,14 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
             if module in node:
                 matched_module[node] = module
                 break
+    for group, (nodes, M) in graph_structure.redundancy_groups.items():
+        if ("network_level" in group):
+            for node in nodes:
+                matched_network_group[node] = group
+        else:
+            for node in nodes:
+                matched_group[node] = group
+
     for node in list(graph_structure.G.nodes()):
         if "ssd" in node:
             # speed and capacity
@@ -186,6 +227,10 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
         failed_events = generate_first_failure_events(graph_structure, time_period, matched_module)
         current_time = 0
         prev_time = 0
+        # maximum flow for initial state
+        key = frozenset(current_failures.items())
+        if not key in max_flow_table:
+            _calculate_max_flow(graph_structure, current_failures, key)
         # Process events
         while(1):    
             event_time, event_type, event_node = pop_event(failed_events, repair_events)
@@ -199,10 +244,7 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
             graph_structure.add_virtual_nodes()
             """
             connected = True
-            key = frozenset(current_failures.items())
             coeff = 1.0
-            if not key in max_flow_table:
-                _calculate_max_flow(graph_structure, current_failures, key)
             
             max_flow = max_flow_table[key]
             if (max_flow <= 0):
@@ -240,9 +282,13 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
                         if event_node in nodes:
                             current_failures[group_name] -= 1
                     del failed_node[event_node]
+            # Update the maximum flow if necessary
+            key = frozenset(current_failures.items())
+            if not key in max_flow_table:
+                _calculate_max_flow(graph_structure, current_failures, key)
             # Push the next repair event
             if event_type == 'fail':
-                push_repair_event(repair_events, event_node, event_time, matched_module, graph_structure)
+                push_repair_event(repair_events, event_node, event_time, matched_module, matched_group, graph_structure, key)
             if event_type == 'repair':
                 push_failed_event(failed_events, event_node, event_time, matched_module, graph_structure)
             prev_time = event_time
@@ -266,6 +312,7 @@ if __name__ == "__main__":
     lock = threading.Lock()
     completed = 0
     max_flow_table = {}
+    max_flow_for_rebuild_table = {}
     current_failures = OrderedDict()
     max_bw = 0
 
