@@ -60,20 +60,10 @@ class GraphStructure:
                 group = (nodes[i:i + group_size], M)
                 group_name = f"{module}_group_{i // group_size}"
                 groups[group_name] = group
-            if ("ssd" in module):
-                network_group_size = network_level_M + network_level_K
-                for i in range(0, len(nodes) // network_group_size):
-                    ssds_per_network_group = []
-                    # ssd0, ssd 31 is same network group
-                    for j in range(0, network_group_size):
-                        ssds_per_network_group.append(nodes[i + j * len(nodes) // network_group_size])
-                    group = (ssds_per_network_group, network_level_M)
-                    group_name = f"network_level_group_{i // network_group_size}"
-                    groups[group_name] = group
             if (len(nodes) == 0): # if there are no nodes in the module, check enclosures
                 group_size = M + K
                 nodes = [enclosure for enclosure in self.enclosures if module in enclosure]
-                print (nodes)
+                #print (nodes)
                 for i in range(0, len(nodes), group_size):
                     group = (nodes[i:i + group_size], M)
                     group_name = f"{module}_group_{i // group_size}"
