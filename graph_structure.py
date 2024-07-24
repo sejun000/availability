@@ -48,6 +48,24 @@ class GraphStructure:
             if "ssd" in node:
                 self.G.add_edge(node, 'virtual_sink', capacity=float('inf'))
 
+    def add_virtual_source(self):
+        self.G.add_node('virtual_source')
+        for node in self.G.nodes():
+            if "switch" in node:
+                self.G.add_edge('virtual_source', node, capacity=float('inf'))
+
+    def remove_virtual_source(self):
+        self.G.remove_node("virtual_source")
+
+    def add_virtual_ssd_nodes(self, ssd_nodes):
+        self.G.add_node('virtual_sink')
+        for node in ssd_nodes:
+            if "ssd" in node and node in self.G.nodes():
+                self.G.add_edge(node, 'virtual_sink', capacity=float('inf'))
+    
+    def remove_virtual_sink(self):
+        self.G.remove_node("virtual_sink")
+
     def remove_virtual_nodes(self):
         self.G.remove_node('virtual_source')
         self.G.remove_node('virtual_sink')
