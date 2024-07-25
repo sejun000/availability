@@ -27,6 +27,8 @@ def parse_arguments():
     parser.add_argument('--network_K', type=int, default=0, help='number of network redundancies')
     parser.add_argument('--network_only', action='store_true', help='Flag to indicate if only network level rebuild is considered')
     parser.add_argument('--file_path', type=str, default='availability_single_switched_hdd.xlsx', help='Path to the Excel file')
+    parser.add_argument('--SSD_type', type=str, default="tlc", help='SSD type, e.g., tlc, qlc.')
+    parser.add_argument('--SSD_write_percentage', type=int, default=0, help='SSD write percentage')
     parser.add_argument('-o', '--output', type=str, help='Output file path to save results')
     args = parser.parse_args()
     return args
@@ -37,6 +39,18 @@ num_simulations = args.num_simulations
 time_period = args.time_period
 SSD_capacity = args.SSD_capacity
 SSD_speed = args.SSD_speed
+SSD_type = args.SSD_type
+if (not SSD_type == "tlc" and not SSD_type == "qlc"):
+    print ("SSD type is not supported")
+    assert False
+SSD_write_percentage = args.SSD_write_percentage
+if (SSD_write_percentage < 0 or SSD_write_percentage > 100):
+    print ("SSD write percentage is not in the range of 0 ~ 100")
+    assert False
+SSD_write_mttf_per_1tb = 10128 # for 200 MB/s writes
+if (SSD_type == "qlc"):
+    SSD_write_mttf_per_1tb = 2640
+
 rebuild_overhead = args.rebuild_overhead
 network_M = args.network_M
 network_K = args.network_K
@@ -312,6 +326,12 @@ def push_failed_event_now(failed_events, event_node, current_time):
 def push_failed_event(failed_events, event_node, current_time, matched_module, graph_structure):
     module = matched_module[event_node]
     mttf = graph_structure.mttfs[module]
+    if ("ssd" in module):
+        write_mttf = SSD_write_mttf_per_1tb * SSD_capacity / 1_000_000_000_000
+        write_ratio = SSD_write_percentage / 100
+        mttf = 1 / ((1 - write_ratio) / mttf + write_ratio / write_mttf)
+        #print (mttf)
+    
     failure_time = current_time + random.expovariate(1 / mttf)
     heapq.heappush(failed_events, (failure_time, 'fail', event_node, current_time))
 
