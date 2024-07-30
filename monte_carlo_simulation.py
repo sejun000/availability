@@ -160,7 +160,7 @@ def _calculate_max_flow(graph_structure_origin, current_failures, key, failed_no
         if ("disconnected" in group_name):
             continue
         if ("ssd" in group_name and current_failures[get_disconnected_name(group_name)] > 0):
-            total_network_availability *= (network_availability ** num_failures)
+            total_network_availability *= (network_availability ** current_failures[get_disconnected_name(group_name)])
             data_loss = True
         if (group_name in skip_failure_group):
             continue
@@ -206,14 +206,8 @@ def is_enclosure(node):
 def generate_first_failure_events(graph_structure, time_period, matched_module):
     events = []
     for node in list(graph_structure.G.nodes()):
-        module = matched_module[node]
-        if module:
-            # generate only once
-            mttf = graph_structure.mttfs[module]
-            mtr = graph_structure.mtrs[module]
-            failure_time = random.expovariate(1 / mttf)
-            #print (module, node, mttf, mtr, current_time, failure_time, repair_time)
-            heapq.heappush(events, (failure_time, 'fail', node, 0))
+        push_failed_event(events, node, 0, matched_module, graph_structure, time_period)
+        
     # Generate enclosure failure and repair events
     for enclosure in list(graph_structure.enclosures):
         module = matched_module[enclosure]
@@ -248,23 +242,29 @@ def update_repair_event(repair_events, current_time, matched_module, matched_gro
             if (key in max_flow_for_rebuild_table):
                 if (group in max_flow_for_rebuild_table[key]):
                     rebuild_bandwidth = max_flow_for_rebuild_table[key][group]
-                    if (rebuild_bandwidth == 0):
+                    if (rebuild_bandwidth == 0 or rebuild_bandwidth < 0):
                         logging.critical("warning 1 update_repair_events !!!")
                         updated_repair_time = current_time + 1 / near_zero_value
                     else:
                         remaining_capacity = SSDs[repair_node][1] - (current_time - prev_time) * SSDs[repair_node][0] * 3600
                         updated_repair_time = current_time + remaining_capacity / rebuild_bandwidth / 3600.0
+                        if remaining_capacity < 0:
+                            remaining_capacity = 0
+                            updated_repair_time = current_time + near_zero_value
                         #print (repair_node, current_time, repair_time, updated_repair_time, SSDs[repair_node][0], rebuild_bandwidth)
                         SSDs[repair_node] = (rebuild_bandwidth, remaining_capacity)
                 elif (group in max_flow_for_network_rebuild_table[key]):
                     # network level rebuild
                     rebuild_bandwidth = max_flow_for_network_rebuild_table[key][group]
-                    if (rebuild_bandwidth == 0):
+                    if (rebuild_bandwidth == 0 or rebuild_bandwidth < 0):
                         logging.critical("warning 2 update_repair_events !!!")
                         updated_repair_time = current_time + 1 / near_zero_value
                     else:
                         remaining_capacity = SSDs[repair_node][1] - (current_time - prev_time) * SSDs[repair_node][0] * 3600
                         updated_repair_time = current_time + remaining_capacity / rebuild_bandwidth / 3600.0
+                        if remaining_capacity < 0:
+                            remaining_capacity = 0
+                            updated_repair_time = current_time + near_zero_value
                         #print (repair_node, current_time, repair_time, updated_repair_time, SSDs[repair_node][0], rebuild_bandwidth)
                         SSDs[repair_node] = (rebuild_bandwidth, remaining_capacity)
                         logging.info (repair_node, current_time, repair_time, updated_repair_time)
@@ -279,7 +279,7 @@ def update_repair_event(repair_events, current_time, matched_module, matched_gro
     for event in updated_repair_events:
         heapq.heappush(repair_events, event)
 
-def push_repair_event(repair_events, event_node, current_time, matched_module, matched_group, graph_structure, key, SSDs, disconnected_ssds, failed_node):
+def push_repair_event(repair_events, event_node, current_time, matched_module, matched_group, graph_structure, key, SSDs, disconnected_ssds, failed_node, time_period):
     global max_flow_for_rebuild_table
     module = matched_module[event_node]
     mtr = graph_structure.mtrs[module]
@@ -293,7 +293,7 @@ def push_repair_event(repair_events, event_node, current_time, matched_module, m
         if (key in max_flow_for_rebuild_table):
             if (group in max_flow_for_rebuild_table[key]):
                 rebuild_bandwidth = max_flow_for_rebuild_table[key][group]
-                if (rebuild_bandwidth == 0):
+                if (rebuild_bandwidth == 0 or rebuild_bandwidth < 0):
                     logging.critical ("warning 1 repaired_event !!!")
                     repair_time = current_time + 1 / near_zero_value
                 else:
@@ -301,7 +301,7 @@ def push_repair_event(repair_events, event_node, current_time, matched_module, m
             elif (group in max_flow_for_network_rebuild_table[key]):
                 # network level rebuild
                 rebuild_bandwidth = max_flow_for_network_rebuild_table[key][group]
-                if (rebuild_bandwidth == 0):
+                if (rebuild_bandwidth == 0 or rebuild_bandwidth < 0):
                     logging.critical ("warning 2 repaired_event !!!")
                     repair_time = current_time + 1 / near_zero_value
                 else:
@@ -318,21 +318,22 @@ def push_repair_event(repair_events, event_node, current_time, matched_module, m
             assert False
     else:
         repair_time = current_time + random.expovariate(1 / mtr)
+    #if (repair_time < time_period):
     heapq.heappush(repair_events, (repair_time, 'repair', event_node, current_time))
 
 def push_failed_event_now(failed_events, event_node, current_time):
     heapq.heappush(failed_events, (current_time, 'fail', event_node, current_time))
 
-def push_failed_event(failed_events, event_node, current_time, matched_module, graph_structure):
+def push_failed_event(failed_events, event_node, current_time, matched_module, graph_structure, time_period):
     module = matched_module[event_node]
     mttf = graph_structure.mttfs[module]
     if ("ssd" in module):
         write_mttf = SSD_write_mttf_per_1tb * SSD_capacity / 1_000_000_000_000
         write_ratio = SSD_write_percentage / 100
         mttf = 1 / ((1 - write_ratio) / mttf + write_ratio / write_mttf)
-        #print (mttf)
-    
+       # print (mttf)
     failure_time = current_time + random.expovariate(1 / mttf)
+    #if (failure_time < time_period):
     heapq.heappush(failed_events, (failure_time, 'fail', event_node, current_time))
 
 def pop_event(events, repair_events):
@@ -472,13 +473,16 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
 
         # Process events
         while(1):    
-            event_time, event_type, event_node, prev_time = pop_event(failed_events, repair_events)
+            event_time, event_type, event_node, temp = pop_event(failed_events, repair_events)
             # Calculate the time difference from the previous event
             break_flag = False
             if (event_time > time_period):
                 event_time = time_period
                 break_flag = True
             time_diff = event_time - prev_time
+            if (time_diff < 0):
+                print (event_type, event_node, event_time, prev_time)
+                assert False
             """
             graph_structure.add_virtual_nodes()
             """
@@ -536,11 +540,11 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
             if event_type == 'fail':
                 if ("ssd0" in event_node and "ssd0" not in disconnected_ssds):
                     an_ssd_up = False
-                push_repair_event(repair_events, event_node, event_time, matched_module, matched_group, graph_structure, key2, SSDs, disconnected_ssds, failed_node)
+                push_repair_event(repair_events, event_node, event_time, matched_module, matched_group, graph_structure, key2, SSDs, disconnected_ssds, failed_node, time_period)
             if event_type == 'repair':
                 if ("ssd0" in event_node and "ssd0" not in disconnected_ssds):
                     an_ssd_up = True
-                push_failed_event(failed_events, event_node, event_time, matched_module, graph_structure)
+                push_failed_event(failed_events, event_node, event_time, matched_module, graph_structure, time_period)
             
             if ("ssd0" in disconnected_ssds):
                 an_ssd_up = False
@@ -565,7 +569,9 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx):
         completed += 1
         #if (completed % 10000 == 0):
         if (simulation_idx == 0 and (completed * 100) % batch_size == 0):
+            #print ("completed "+ str(completed * 100 // batch_size) + "%" + str(event_time), up_time + down_time)
             print ("completed "+ str(completed * 100 // batch_size) + "%")
+        assert (up_time + down_time >= time_period - 1 and up_time + down_time <= time_period + 1)
     queue.put((total_up_time, total_down_time, total_effective_up_time, total_an_ssd_up_time))
     return ""
 
@@ -643,7 +649,7 @@ if __name__ == "__main__":
     output_data = (f"{model} | {configuration} | Total Up Time: {total_up_time:.2f} | Total Down Time: {total_down_time:.2f} | Total Effective Up Time: {total_effective_up_time:.2f} | "
                    f"Availability: {total_up_time / (total_up_time + total_down_time):.12f} | Effective Availability: {total_effective_up_time / (total_up_time + total_down_time):.12f} | "
                    f"Num Simulations: {num_simulations} | Time Period: {time_period} | SSD Capacity: {SSD_capacity} | SSD Speed: {SSD_speed} | "
-                   f"Rebuild Overhead: {rebuild_overhead} | Network Redundancy: {network_redundancy} | Network Only: {network_only} | an SSD Availability : {total_an_ssd_up_time / (total_up_time + total_down_time)} | Network_M: {network_M} | Network_K: {network_K}\n")
+                   f"Rebuild Overhead: {rebuild_overhead} | Network Redundancy: {network_redundancy} | Network Only: {network_only} | an SSD Availability : {total_an_ssd_up_time / (total_up_time + total_down_time)} | Network_M: {network_M} | Network_K: {network_K} | SSD_write_percentage: {SSD_write_percentage} | SSD_type: {SSD_type}\n")
     if output_file:
         with open(output_file, 'a') as f:
             f.write(output_data)

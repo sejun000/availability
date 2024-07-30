@@ -7,9 +7,9 @@ network_M=4
 labels=("local_active + network_active" "network_only")
 #network_parities=(0 1 2 3)
 network_parities=(1)
-capacity=(1_000_000_000_000 4_000_000_000_000 16_000_000_000_000 64_000_000_000_000)
+capacity=(16_000_000_000_000 32_000_000_000_000 64_000_000_000_000)
 ssd_type=("tlc")
-write_percents=(0 20 50 80 100)
+write_percents=(0 20 40 60)
 # 파일 초기화
 echo "" > $output_file
 
