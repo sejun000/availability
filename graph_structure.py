@@ -117,6 +117,5 @@ class GraphStructure:
         availabilities = {str(row['module']): row['Availability'] for _, row in avail_df.iterrows()}
         mttfs = {str(row['module']): row['MTTF'] for _, row in avail_df.iterrows()}
         mtrs = {str(row['module']): row['MTR'] for _, row in avail_df.iterrows()}
-        redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}
-        print (redundancies)     
+        redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}    
         return edges, enclosures, availabilities, redundancies, mttfs, mtrs
