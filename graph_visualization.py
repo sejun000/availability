@@ -128,7 +128,7 @@ class InteractiveGraph:
         pass
 
 if __name__ == "__main__":
-    file_path = 'availability_single_switched_hdd.xlsx'
+    file_path = '3tier_cable_out.xlsx'
     sheet_name = 'HW Architecture'
     start_cell = ('B', 2)  # Corresponds to cell B2
     enclosure_start_cell = ('F', 2)  # Corresponds to cell F2
