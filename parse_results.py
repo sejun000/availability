@@ -11,7 +11,15 @@ from collections import OrderedDict
 #f = open("results_all_20240807_233646.txt")
 #f = open("results_all_20240808_073803.txt")
 #f = open("results_all_20240812_223502.txt")
-f = open("results_all_20240813_074648.txt")
+#f = open("results_all_20240813_074648.txt")
+#f = open("results_all_20240813_104719.txt")
+#f = open("results_all_20240813_121344.txt")
+#f = open("results_20240813_215229.txt")
+#f = open("results_20240813_222211.txt")
+#f = open("results_all_20240820_195007.txt")
+#f = open("results_all_20240820_225747.txt")
+#f = open("results_all_20240821_145328.txt")
+f = open("results_all_20240822_003339.txt")
 test_results = []
 
 for line in f:
@@ -58,12 +66,17 @@ for test_result in test_results:
         f_write.write("\n")
     for name in sorted_dict:
         f_write.write(sorted_dict[name] + " | ")
-        if "3tier" in sorted_dict["tier"]:
+        if not "3tier" in sorted_dict["tier"]:
+            continue
+        #if not "Network" in sorted_dict["Parity Type"]:
+        #    continue
+        if True:
             if (name == "Parity Type"):
                 data['category'].append(sorted_dict[name])
             if (name == "Effective Capacity"):
                 data['x'].append(float(sorted_dict[name]))
             if (name == "Availability"):
+            #if (name == "Effective Availability"):
                 data['y'].append(-math.log10(1-float(sorted_dict[name])))    
                 data['label'].append(sorted_dict["Network_M"]+"_"+sorted_dict["Network_K"]+"_"+sorted_dict["SSD_M"]+"_"+sorted_dict["SSD_K"])
     f_write.write("\n")
@@ -74,6 +87,7 @@ df = pd.DataFrame(data)
 
 categories = df['category'].unique()
 colors = ['red', 'blue', 'green', 'purple']
+#colors = ['red']
 color_dict = dict(zip(categories, colors))
 print (categories, color_dict)
 
@@ -91,7 +105,8 @@ for category in categories:
 plt.xlim(0, max(df['x']) + 0.2)
 plt.ylim(0, max(df['y']) + 1)
 plt.xlabel('X values : Effective Capacity')
-plt.ylabel('Y values : Availability')
+#plt.ylabel('Y values : Availability')
+plt.ylabel('Y values : Effective Availability')
 plt.title('Scatter Plot with Different Colors by Category')
 plt.legend(title='Category')
 plt.grid(True)

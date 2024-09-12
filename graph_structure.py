@@ -1,6 +1,8 @@
 import pandas as pd
 import networkx as nx
-from networkx.algorithms.flow import preflow_push
+from networkx.algorithms.flow import edmonds_karp
+
+max_edge_value = 1_000_000_000_000_000 * 1.0
 
 class GraphStructure:
     def __init__(self, edges, enclosures, availabilities, redundancies, mttfs, mtrs, network_level_M = 1, network_level_K = 1):
@@ -33,35 +35,37 @@ class GraphStructure:
         else:
             raise ValueError("Unknown weight format")
 
-    def calculate_max_flow(self):
-        self.add_virtual_nodes()
-        flow_value, flow_dict = nx.maximum_flow(self.G, 'virtual_source', 'virtual_sink', flow_func=preflow_push)
+    def calculate_max_flow(self, start_node_module, leaf_node_module):
+        self.add_virtual_nodes(start_node_module, leaf_node_module)
+        flow_value, flow_dict = nx.maximum_flow(self.G, 'virtual_source', 'virtual_sink',  flow_func=edmonds_karp)
         self.remove_virtual_nodes()
         return flow_value
 
-    def add_virtual_nodes(self):
+    def add_virtual_nodes(self, start_node_module, leaf_node_module):
         self.G.add_node('virtual_source')
         self.G.add_node('virtual_sink')
         for node in self.G.nodes():
-            if "switch" in node:
-                self.G.add_edge('virtual_source', node, capacity=float('inf'))
-            if "ssd" in node:
-                self.G.add_edge(node, 'virtual_sink', capacity=float('inf'))
+            if start_node_module in node:
+                #print (start_node_module, node)
+                self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
+            if leaf_node_module in node:
+                #print (leaf_node_module, node)
+                self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
 
-    def add_virtual_source(self):
+    def add_virtual_source(self, start_node_module):
         self.G.add_node('virtual_source')
         for node in self.G.nodes():
-            if "switch" in node:
-                self.G.add_edge('virtual_source', node, capacity=float('inf'))
+            if start_node_module in node:
+                self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
 
     def remove_virtual_source(self):
         self.G.remove_node("virtual_source")
 
-    def add_virtual_ssd_nodes(self, ssd_nodes):
+    def add_virtual_ssd_nodes(self, ssd_nodes, leaf_node_module):
         self.G.add_node('virtual_sink')
         for node in ssd_nodes:
-            if "ssd" in node and node in self.G.nodes():
-                self.G.add_edge(node, 'virtual_sink', capacity=float('inf'))
+            if leaf_node_module in node and node in self.G.nodes():
+                self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
     
     def remove_virtual_sink(self):
         self.G.remove_node("virtual_sink")
@@ -72,7 +76,7 @@ class GraphStructure:
     def _create_redundancy_groups(self, network_level_K, network_level_M):
         groups = {}
         for module, (M, K) in self.redundancies.items():
-            nodes = [node for node in self.G.nodes() if module in node]
+            nodes = [node for node in self.G.nodes() if node.startswith(module)]
             group_size = M + K
             for i in range(0, len(nodes), group_size):
                 group = (nodes[i:i + group_size], M)

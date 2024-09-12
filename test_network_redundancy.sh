@@ -1,9 +1,11 @@
 #!/bin/bash
 
 output_file="results_all_$(date '+%Y%m%d_%H%M%S').txt"
-#excel_files=("2tier.xlsx" "3tier.xlsx")
+execute_file="core.py"
+excel_files=("3tier.xlsx" "2tier.xlsx")
 #excel_files=("3tier_both_fast.xlsx")
-excel_files=("3tier.xlsx")
+#excel_files=("3tier_both_fast.xlsx" "2tier_both_fast.xlsx")
+additional_param=("--lowest_common_level_module backend_module" "--lowest_common_level_module switch")
 #network_only_values=(False True)
 network_only_values=(False)
 total_nodes=(32 32 32 32 32 32 32 32 32)
@@ -25,7 +27,9 @@ capacity=(64_000_000_000_000)
 echo "" > $output_file
 
 # 시뮬레이션 실행
-for excel_file in "${excel_files[@]}"; do
+for ii in "${!additional_param[@]}"; do
+    excel_file=${excel_files[$ii]}
+    additional_param_value=${additional_param[$ii]}
     for i in "${!network_only_values[@]}"; do
         network_only=${network_only_values[$i]}
         label=${labels[$i]}
@@ -39,15 +43,15 @@ for excel_file in "${excel_files[@]}"; do
                     SSD_M=${SSD_Ms[$j]}
                     SSD_K=${SSD_Ks[$j]}
                     if [ $k -eq 0 ]; then
-                        echo "Running simulation with file: $excel_file, rebuild, network M : $network_M, network K : $network_K, network_only: $network_only, capacity: $cap, SSD_M: $SSD_M, SSD_K: $SSD_K"
-                        python3 monte_carlo_simulation.py --file_path "$excel_file" --network_M "$network_M" --network_K "$network_K" --network_m "$network_m" --total_nodes $total_node -o $output_file --SSD_capacity $cap --SSD_M $SSD_M --SSD_K $SSD_K --SSD_write_percentage $SSD_write_percentage --generate_fault_injection
+                        echo "Running simulation with file: $excel_file, rebuild, network M : $network_M, network K : $network_K, network_only: $network_only, capacity: $cap, SSD_M: $SSD_M, SSD_K: $SSD_K, additional_param: $additional_param_value"
+                        python3 ${execute_file} --file_path "$excel_file" --network_M "$network_M" --network_K "$network_K" --network_m "$network_m" --total_nodes $total_node -o $output_file --SSD_capacity $cap --SSD_M $SSD_M --SSD_K $SSD_K --SSD_write_percentage $SSD_write_percentage --generate_fault_injection $additional_param_value
                     fi
                     if [ "$network_only" = "True" ]; then
-                        echo "Running simulation with file: $excel_file, rebuild, network M : $network_M, network K : $network_K, network_only: $network_only, capacity: $cap, SSD_M: $SSD_M, SSD_K: $SSD_K"
-                        python3 monte_carlo_simulation.py --file_path "$excel_file" --network_M "$network_M" --network_K "$network_K" --network_m "$network_m" --total_nodes $total_node  --network_only -o $output_file --SSD_capacity $cap --SSD_M $SSD_M --SSD_K $SSD_K --SSD_write_percentage $SSD_write_percentage
+                        echo "Running simulation with file: $excel_file, rebuild, network M : $network_M, network K : $network_K, network_only: $network_only, capacity: $cap, SSD_M: $SSD_M, SSD_K: $SSD_K, additional_param: $additional_param_value"
+                        python3 ${execute_file} --file_path "$excel_file" --network_M "$network_M" --network_K "$network_K" --network_m "$network_m" --total_nodes $total_node  --network_only -o $output_file --SSD_capacity $cap --SSD_M $SSD_M --SSD_K $SSD_K --SSD_write_percentage $SSD_write_percentage $additional_param_value
                     else
-                        echo "Running simulation with file: $excel_file, rebuild, network M : $network_M, network K : $network_K, network_only: $network_only, capacity: $cap, SSD_M: $SSD_M, SSD_K: $SSD_K"
-                        python3 monte_carlo_simulation.py --file_path "$excel_file" --network_M "$network_M" --network_K "$network_K" --network_m "$network_m" --total_nodes $total_node -o $output_file --SSD_capacity $cap --SSD_M $SSD_M --SSD_K $SSD_K --SSD_write_percentage $SSD_write_percentage
+                        echo "Running simulation with file: $excel_file, rebuild, network M : $network_M, network K : $network_K, network_only: $network_only, capacity: $cap, SSD_M: $SSD_M, SSD_K: $SSD_K, additional_param: $additional_param_value"
+                        python3 ${execute_file} --file_path "$excel_file" --network_M "$network_M" --network_K "$network_K" --network_m "$network_m" --total_nodes $total_node -o $output_file --SSD_capacity $cap --SSD_M $SSD_M --SSD_K $SSD_K --SSD_write_percentage $SSD_write_percentage $additional_param_value
                     fi
                 done
             done
