@@ -5,7 +5,10 @@ from networkx.algorithms.flow import edmonds_karp
 max_edge_value = 1_000_000_000_000_000 * 1.0
 
 class GraphStructure:
-    def __init__(self, edges, enclosures, availabilities, redundancies, mttfs, mtrs, network_level_M = 1, network_level_K = 1):
+    def __init__(self, edges = None, enclosures = None, availabilities = None, redundancies = None, mttfs = None, mtrs = None):
+        if edges is None:
+            self.__init_test()
+            return
         self.G = nx.DiGraph()
         self.edges = edges
         self.enclosures = enclosures
@@ -13,9 +16,19 @@ class GraphStructure:
         self.redundancies = redundancies
         self._add_edges()
         self._add_availabilities()
-        self.redundancy_groups = self._create_redundancy_groups(network_level_M, network_level_K)
+        self.redundancy_groups = self._create_redundancy_groups()
         self.mttfs = mttfs
         self.mtrs = mtrs
+    
+    def __init_test(self):
+        self.G = nx.DiGraph()
+        self.edges = []
+        self.enclosures = {}
+        self.availabilities = {}
+        self.redundancies = {}
+        self.redundancy_groups = {}
+        self.mttfs = {}
+        self.mtrs = {}
 
     def _add_edges(self):
         for start, end, weight in self.edges:
@@ -73,7 +86,7 @@ class GraphStructure:
     def remove_virtual_nodes(self):
         self.G.remove_node('virtual_source')
         self.G.remove_node('virtual_sink')
-    def _create_redundancy_groups(self, network_level_K, network_level_M):
+    def _create_redundancy_groups(self):
         groups = {}
         for module, (M, K) in self.redundancies.items():
             nodes = [node for node in self.G.nodes() if node.startswith(module)]

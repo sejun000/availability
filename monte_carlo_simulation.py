@@ -263,6 +263,7 @@ def _calculate_max_flow(graph_structure_origin, current_failures, key, failed_no
         flow = graph_structure.calculate_max_flow(start_node_module, leaf_node_module)
         #print (failed_node)
         #print (flow)
+    print (key, flow, total_network_availability, total_network_availability_if_im_alive)
     max_flow_table[key] = flow
     max_flow_for_rebuild_table[key] = rebuilding_flow
     max_flow_for_network_rebuild_table[key] = network_rebuild_flow
