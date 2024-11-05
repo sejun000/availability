@@ -19,7 +19,7 @@ from networkx.algorithms.flow import edmonds_karp
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Monte Carlo simulation parameters.')
-    parser.add_argument('--num_simulations', type=int, default=400000, help='Number of simulations to run')
+    parser.add_argument('--num_simulations', type=int, default=4000000, help='Number of simulations to run')
     parser.add_argument('--time_period', type=int, default=20 * 365 * 24, help='Time period for the simulation in hours')
     parser.add_argument('--SSD_capacity', type=int, default=64_000_000_000_000, help='SSD capacity in bytes')
     parser.add_argument('--rebuild_overhead', type=float, default=0.2, help='Rebuild overhead as a fraction')
@@ -34,7 +34,7 @@ def parse_arguments():
     parser.add_argument('--network_only', action='store_true', help='Flag to indicate if only network level rebuild is considered')
     parser.add_argument('--file_path', type=str, default='3tier.xlsx', help='Path to the Excel file')
     parser.add_argument('--SSD_type', type=str, default="qlc", help='SSD type, e.g., tlc, qlc.')
-    parser.add_argument('--host_DWPD', type=int, default=1, help='host writes as DWPD')
+    parser.add_argument('--host_DWPD', type=float, default=1, help='host writes as DWPD')
     parser.add_argument('-o', '--output', type=str, help='Output file path to save results')
     parser.add_argument('--flow_cdf', type=str, default='flow_cdf.txt', help='File to save flow CDF')
     parser.add_argument('--leaf_node_module', type=str, default='ssd', help='Leaf node module name')
@@ -160,17 +160,18 @@ def _calculate_connected_ssd(graph_structure_origin, key, failed_node, lowest_co
     graph_structure.remove_virtual_nodes()
     graph_structure.add_virtual_nodes(start_node_module, lowest_common_level_module)
     connected = nx.has_path(graph_structure.G, 'virtual_source', 'virtual_sink')
+    #print (connected, lowest_common_level_module, disconnected_ssd)
     lowest_common_level_module_connected_table[key] = connected
                     
 
-def _calculate_max_flow(graph_structure_origin, current_failures, key, failed_node, max_flow_table, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table, input_ssd_availability, network_availability, network_availability_if_im_alive, network_availability_table):
+def _calculate_max_flow(graph_structure_origin, current_failures, key, failed_node, max_flow_table, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table, network_availability, network_availability_if_im_alive, catastrophic_failures_table, first_group_available_table):
     if (key in max_flow_table):
         return
     graph_structure = copy.deepcopy(graph_structure_origin)
     rebuilding_flow = dict() # group to rebuild bandwidth mapping
     network_rebuild_flow = dict()
     skip_failure_group = dict()
-    data_loss = False
+    catastrophic_failure_group = dict()
     
     for node in failed_node:
         if (not leaf_node_module in node):
@@ -212,43 +213,43 @@ def _calculate_max_flow(graph_structure_origin, current_failures, key, failed_no
                         for u, v, edge_data in graph_structure.G.in_edges(node, data=True):
                             if 'capacity' in graph_structure.G[u][v]:
                                 # if controller is exist
+                                write_speed = min(SSD_speed, graph_structure.G[u][v]['capacity'])
                                 if (idx == 0):
                                     #print(group_name)
                                     if (group_name in rebuilding_flow):
-                                        rebuilding_flow[group_name] += rebuild_overhead * rebuild_speed_up * graph_structure.G[u][v]['capacity']    
+                                        rebuilding_flow[group_name] += rebuild_overhead * rebuild_speed_up * write_speed    
                                     else:
-                                        rebuilding_flow[group_name] = rebuild_overhead * rebuild_speed_up * graph_structure.G[u][v]['capacity']
+                                        rebuilding_flow[group_name] = rebuild_overhead * rebuild_speed_up * write_speed
                                 if (ssd_m > 0):
-                                    graph_structure.G[u][v]['capacity'] -= rebuild_overhead * 2 * graph_structure.G[u][v]['capacity']
+                                    graph_structure.G[u][v]['capacity'] -= rebuild_overhead * 2 * write_speed
                                 else:
-                                    graph_structure.G[u][v]['capacity'] -= rebuild_overhead * graph_structure.G[u][v]['capacity']
+                                    graph_structure.G[u][v]['capacity'] -= rebuild_overhead * write_speed
                         #print ("local : ", u, v, graph_structure.G[u][v]['capacity'], graph_structure_origin.G[u][v]['capacity'], rebuilding_flow[group_name])
                         idx += 1
                     else:
                         logging.critical("node is not in the graph", node)
     # if network level rebuilding is necessary, get maximum flow
     graph_structure.add_virtual_source(start_node_module)
-    total_network_availability = 0
-    total_network_availability_if_im_alive = 0
+    non_catastrophic_failed_group_count = 0
+    catastrophic_failed_group_count = 0
     for group_name, num_failures in current_failures.items():
         if ("disconnected" in group_name):
             continue
         if (leaf_node_module in group_name and current_failures[get_disconnected_name(group_name)] > 0):
-            total_network_availability += current_failures[get_disconnected_name(group_name)]
-            data_loss = True
+            catastrophic_failure_group[group_name] = 1
+            catastrophic_failed_group_count += 1
         if (group_name in skip_failure_group):
+            non_catastrophic_failed_group_count += 1
             continue
         if (leaf_node_module in group_name and num_failures == 0 and current_failures[get_disconnected_name(group_name)] == 0):
             nodes, M = graph_structure.redundancy_groups[get_original_group_name(group_name)]
-            total_network_availability_if_im_alive += len(nodes)
-
+            non_catastrophic_failed_group_count += 1
         if (leaf_node_module in group_name and num_failures > 0 and current_failures[get_disconnected_name(group_name)] == 0):
-            total_network_availability += num_failures
-            data_loss = True
+            catastrophic_failure_group[group_name] = 1
+            catastrophic_failed_group_count += 1
             nodes, M = graph_structure.redundancy_groups[get_original_group_name(group_name)]
-            total_network_availability_if_im_alive += len(nodes) - num_failures
             failed_ssd_nodes = nodes[0:num_failures]
-            graph_structure.add_virtual_ssd_nodes(failed_ssd_nodes, leaf_node_module)
+            graph_structure.add_virtual_ssd_nodes(failed_ssd_nodes, leaf_node_module, edge_value=SSD_speed)
             try:
                 flow_value, flow_dict = nx.maximum_flow(graph_structure.G, 'virtual_source', 'virtual_sink', flow_func=edmonds_karp)
             except Exception as e:
@@ -291,22 +292,39 @@ def _calculate_max_flow(graph_structure_origin, current_failures, key, failed_no
                         else:
                             graph_structure.G[u][v]['capacity'] -= rebuild_overhead * flow / num_failures / bandwidth_divider
                             
-            if (len(nodes) == M): # there is no network parity
+            if (network_K == 0): # there is no network parity
                 # IO is not happen, so all bandwidth can be used for IO
                 network_rebuild_flow[group_name] = flow_value * rebuild_overhead / num_failures / bandwidth_divider
             else:
                 network_rebuild_flow[group_name] = flow_value * rebuild_overhead / (network_redundancy) / num_failures * rebuild_speed_up / bandwidth_divider
             graph_structure.remove_virtual_sink()
-    flow = 0
-    if (data_loss == True and network_K == 0):
-        flow = 0
-    else:
-        flow = graph_structure.calculate_max_flow(start_node_module, leaf_node_module)
-    #print (key, flow, total_network_availability, total_network_availability_if_im_alive)
-    max_flow_table[key] = flow
+    flows = {}
+    graph_structure.remove_virtual_nodes()
+    graph_structure.add_virtual_source(start_node_module)
+    for group_name, num_failures in current_failures.items():
+        if ("disconnected" in group_name):
+            continue
+        if (leaf_node_module in group_name and current_failures[get_disconnected_name(group_name)] == 0):
+             nodes, M = graph_structure.redundancy_groups[get_original_group_name(group_name)]
+             graph_structure.add_virtual_ssd_nodes(nodes, leaf_node_module)
+             flow, flow_dict = nx.maximum_flow(graph_structure.G, 'virtual_source', 'virtual_sink', flow_func=edmonds_karp)
+             flows[group_name] = flow
+             graph_structure.remove_virtual_sink()
+    graph_structure.remove_virtual_nodes()
+    graph_structure.add_virtual_nodes(start_node_module, leaf_node_module)
+    flow_value, flow_dict = nx.maximum_flow(graph_structure.G, 'virtual_source', 'virtual_sink', flow_func=edmonds_karp)
+    #print(flow_value)
+    flows['max_flow'] = flow_value
+    max_flow_table[key] = flows
     max_flow_for_rebuild_table[key] = rebuilding_flow
     max_flow_for_network_rebuild_table[key] = network_rebuild_flow
-    network_availability_table[key] = (network_availability ** total_network_availability) * (network_availability_if_im_alive ** total_network_availability_if_im_alive)
+    first_group_availabile = False
+    if (not (leaf_node_module + "_group_0") in catastrophic_failure_group):
+        first_group_availabile = True
+    first_group_available_table[key] = first_group_availabile
+    catastrophic_failures_table[key] = catastrophic_failure_group
+    #print ("##########", catastrophic_failures_table[key], catastrophic_failed_group_count, network_availability, non_catastrophic_failed_group_count, network_availability_if_im_alive, skip_failure_group, current_failures)
+    
 
 def is_enclosure(node):
     return node[0].isupper()
@@ -421,6 +439,7 @@ def push_repair_event(repair_events, event_node, current_time, matched_module, m
                     repair_time = current_time + 1 / near_zero_value
                 else:
                     repair_time = current_time + SSD_capacity / rebuild_bandwidth / 3600.0
+                #print (repair_time - current_time)
             elif (group in max_flow_for_network_rebuild_table[key]):
                 # network level rebuild
                 rebuild_bandwidth = max_flow_for_network_rebuild_table[key][group]
@@ -443,6 +462,7 @@ def push_repair_event(repair_events, event_node, current_time, matched_module, m
             assert False
         if (check_repair_time_for_ssd_switching == True):
             repair_time += SSDs[event_node][2]
+            #print (repair_time - current_time)
     else:
         repair_time = current_time + random.expovariate(1 / mtr)
     #if (repair_time < time_period):
@@ -456,6 +476,7 @@ def push_failed_event(failed_events, event_node, current_time, matched_module, g
     mttf = graph_structure.mttfs[module]
     if (leaf_node_module in module):
         mttf = 24 * 365 * guaranteed_years * SSD_DWPD_limit / host_DWPD
+       # print(mttf)
     failure_time = current_time + random.expovariate(1 / mttf)
     heapq.heappush(failed_events, (failure_time, 'fail', event_node, current_time))
 
@@ -515,7 +536,7 @@ def get_original_group_name(group_name):
 
 def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, batch_size, network_availability, network_availability_if_im_alive):
     total_up_time = 0
-    total_down_time = 0
+    total_time = 0
     total_effective_up_time = 0
     total_an_ssd_up_time = 0
     completed = 0
@@ -524,7 +545,8 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
     disconnected_ssd_table = OrderedDict()
     lowest_common_level_module_connected_table = OrderedDict()
     max_flow_for_network_rebuild_table = {}
-    network_availability_table = {}
+    catastrophic_failures_table = {}
+    first_group_available_table = {}
 
     graph_structure = copy.deepcopy(graph_structure_origin)
 
@@ -561,7 +583,8 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
             # if SSDs[node][1] is less than SSD_capacity, some rebuild process happens (0 means not rebuilded SSD)
             # SSDs[node][2] indicates the switching time for a failed SSD
             SSDs[node] = (SSD_speed, 0, 0)
-
+    current_failures = OrderedDict()
+    current_failures_except_ssd = OrderedDict()
     for local_simul in range(0, batch_size):
         # when you add / delete graph, you need to copy here
         """
@@ -569,13 +592,11 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
         """
         up_time = 0
         effective_up_time = 0
-        down_time = 0
+        time_for_a_simulation = 0
         failed_events = []
         repair_events = []
         prev_disconnected_ssds = OrderedDict()
         failed_node = OrderedDict()
-        current_failures = OrderedDict()
-        current_failures_except_ssd = OrderedDict()
         for group_name, (nodes, M) in graph_structure.redundancy_groups.items():
             current_failures[group_name] = 0
             if (not leaf_node_module in group_name):
@@ -590,9 +611,8 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
         key1 = frozenset(current_failures_except_ssd.items())
         key2 = frozenset(current_failures.items())
         an_ssd_up_time = 0
-        an_ssd_up = True
         _calculate_connected_ssd(graph_structure, key1, failed_node, lowest_common_level_module, disconnected_ssd_table, lowest_common_level_module_connected_table)
-        _calculate_max_flow(graph_structure, current_failures, key2, failed_node, max_flow_table, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table, input_ssd_availability, network_availability, network_availability_if_im_alive, network_availability_table)
+        _calculate_max_flow(graph_structure, current_failures, key2, failed_node, max_flow_table, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table, network_availability, network_availability_if_im_alive, catastrophic_failures_table, first_group_available_table)
 
         # Process events
         while(1):    
@@ -609,34 +629,37 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
             """
             graph_structure.add_virtual_nodes()
             """
-            connected = True
+            connected = False
             coeff = 1.0
             
-            max_flow = max_flow_table[key2]
-            value = random.random()
-            # if network case, we need to consider network availability
-            # else, network_availability_table[key2] is 1
-            #if (max_flow >= 0 and value > network_availability_table_if_im_alive[key2]):
-            #    connected = False
-            if (max_flow <= 0):
-                if (network_K == 0 or (network_K > 0 and value > network_availability_table[key2])):
-                    connected = False
-            coeff = max_flow / max_bw
-            #if (max_flow != 0):
-            #print (max_flow, max_bw, time_diff)
-            #print ("key1", key1)
-            #print ("key2", key2)
-            if connected == True:
-                max_flow_cdf[int(max_flow)] = max_flow_cdf.get(int(max_flow), 0) + time_diff
-                up_time += time_diff
-                effective_up_time += time_diff * coeff
-            else:
-                down_time += time_diff
-            if (an_ssd_up == True):
-                an_ssd_up_time += time_diff
+            max_flows = max_flow_table[key2]
+            flow_for_time_diff = 0
+            total_groups = len(max_flows.items())
+            for group_name, flow in max_flows.items():
+                connected = False
+                random_value = random.random()
+                #print (lowest_common_level_module_connected_table[key1])
+                #if (lowest_common_level_module_connected_table[key1] == False):
+                    #continue
+                if (group_name in catastrophic_failures_table[key2]):
+                    #print (group_name, key2)
+                    if (network_K > 0 and random_value < network_availability):
+                        connected = True
+                else:
+                    connected = True
+                if (connected == True):
+                    flow_for_time_diff = min(max_flows['max_flow'] / total_groups, flow)
+                    coeff = flow_for_time_diff / max_bw
+                    max_flow_cdf[int(flow_for_time_diff)] = max_flow_cdf.get(int(flow_for_time_diff), 0) + time_diff
+                    up_time += (time_diff / total_groups)
+                    effective_up_time += coeff * time_diff
+                    #print (effective_up_time, flow)
+                    if ("_group_0" in group_name):
+                        an_ssd_up_time += time_diff
+           
+            time_for_a_simulation += time_diff
             if (break_flag == True):
                 break
-
             # Handle the event
             count_failed_node(event_type, event_node, failed_node, current_failures_except_ssd, current_failures, matched_group)
             # Update the maximum flow if necessary
@@ -651,26 +674,16 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
             disconnected_ssds = disconnected_ssd_table[key1]
             count_current_failures(graph_structure, disconnected_ssds, current_failures, matched_group)
             key2 = frozenset(current_failures.items())
-            _calculate_max_flow(graph_structure_origin, current_failures, key2, failed_node, max_flow_table, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table, input_ssd_availability, network_availability, network_availability_if_im_alive, network_availability_table)
-
+            _calculate_max_flow(graph_structure_origin, current_failures, key2, failed_node, max_flow_table, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table, network_availability, network_availability_if_im_alive, catastrophic_failures_table, first_group_available_table)
+            
             #if (not leaf_node_module in event_node):
+            #print (current_failures['ssd_group_0'], current_failures['ssd_group_1'])
             update_repair_event(repair_events, event_time, matched_module, matched_group, graph_structure, key2, SSDs, disconnected_ssds, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
             # Push the next repair event
-            first_leaf_node = leaf_node_module + "0"
             if event_type == 'fail':
-                if (first_leaf_node in event_node and first_leaf_node not in disconnected_ssds):
-                    an_ssd_up = False
                 push_repair_event(repair_events, event_node, event_time, matched_module, matched_group, graph_structure, key2, SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
             if event_type == 'repair':
-                if (first_leaf_node in event_node and first_leaf_node not in disconnected_ssds):
-                    an_ssd_up = True
                 push_failed_event(failed_events, event_node, event_time, matched_module, graph_structure)
-            
-            if (first_leaf_node in disconnected_ssds):
-                an_ssd_up = False
-            # if maximum flow is more than 0, an ssd can be rebuilt with local level
-            if (max_flow_table[key2] > 0):
-                an_ssd_up = True
             
             for ssd in prev_disconnected_ssds:
                 if ssd not in disconnected_ssds:
@@ -678,20 +691,20 @@ def monte_carlo_simulation(graph_structure_origin, time_period, simulation_idx, 
                     push_failed_event_now(failed_events, ssd, event_time)
             
             prev_time = event_time
-            prev_disconnected_ssds = copy.deepcopy(disconnected_ssds)
+            prev_disconnected_ssds = disconnected_ssds
             #print (prev_disconnected_ssds)
         # Calculate the availability
         total_up_time += up_time
-        total_down_time += down_time
+        total_time += time_for_a_simulation
         total_effective_up_time += effective_up_time
         total_an_ssd_up_time += an_ssd_up_time
         completed += 1
         #if (completed % 10000 == 0):
         if (simulation_idx == 0 and (completed * 100) % batch_size == 0):
-            #print ("completed "+ str(completed * 100 // batch_size) + "%" + str(event_time), up_time + down_time)
+            #print ("completed "+ str(completed * 100 // batch_size) + "%" + str(event_time), up_time + time_for_a_simulation)
             print ("completed "+ str(completed * 100 // batch_size) + "%")
-        assert (up_time + down_time >= time_period - 1 and up_time + down_time <= time_period + 1)
-    queue.put((total_up_time, total_down_time, total_effective_up_time, total_an_ssd_up_time, max_flow_cdf))
+        assert (time_for_a_simulation >= time_period - 1 and time_for_a_simulation <= time_period + 1)
+    queue.put((total_up_time, total_time, total_effective_up_time, total_an_ssd_up_time, max_flow_cdf))
     return ""
 
 def initial_computation(graph_structure, configuration, input_ssd_availability = -1):
@@ -764,14 +777,14 @@ if __name__ == "__main__":
     
 
     total_up_time = 0
-    total_down_time = 0
+    total_time = 0
     total_effective_up_time = 0
     total_an_ssd_up_time = 0
     merged_max_flow_cdf = OrderedDict()
     print (graph_structure_origin.enclosures)
-    for up_time, down_time, effective_up_time, an_ssd_up_time, max_flow_cdf in results:
+    for up_time, time_for_a_simulation, effective_up_time, an_ssd_up_time, max_flow_cdf in results:
         total_up_time += up_time
-        total_down_time += down_time
+        total_time += time_for_a_simulation
         total_effective_up_time += effective_up_time
         total_an_ssd_up_time += an_ssd_up_time
         for key, value in max_flow_cdf.items():
@@ -780,10 +793,10 @@ if __name__ == "__main__":
     model = file_path.rstrip('.xlsx')
     
     num_network_groups = total_nodes // (network_M + network_K)
-    output_data = (f"{model} | {configuration} | Total Up Time: {total_up_time:.2f} | Total Down Time: {total_down_time:.2f} | Total Effective Up Time: {total_effective_up_time:.2f} | "
-                   f"Availability: {(total_up_time / (total_up_time + total_down_time))} | Effective Availability: {(total_effective_up_time / (total_up_time + total_down_time))} | "
+    output_data = (f"{model} | {configuration} | Total Up Time: {total_up_time:.2f} | Total Down Time: {total_time - total_up_time:.2f} | Total Effective Up Time: {total_effective_up_time:.2f} | "
+                   f"Availability: {(total_up_time /  total_time)} | Effective Availability: {(total_effective_up_time / total_time)} | "
                    f"Num Simulations: {num_simulations} | Time Period: {time_period} | SSD Capacity: {SSD_capacity} | SSD Speed: {SSD_speed} | "
-                   f"Rebuild Overhead: {rebuild_overhead} | Network Redundancy: {network_redundancy} | Network Only: {network_only} | an SSD Availability : {total_an_ssd_up_time / (total_up_time + total_down_time)} | Network_M: {network_M} | Network_K: {network_K} | Host_DWPD: {host_DWPD} | SSD_type: {SSD_type} | Network_m: {network_m} | Total Nodes: {total_nodes} | Network Availability: {network_availability} | Input SSD Availability: {input_ssd_availability} | "
+                   f"Rebuild Overhead: {rebuild_overhead} | Network Redundancy: {network_redundancy} | Network Only: {network_only} | an SSD Availability : {total_an_ssd_up_time / (total_time)} | Network_M: {network_M} | Network_K: {network_K} | Host_DWPD: {host_DWPD} | SSD_type: {SSD_type} | Network_m: {network_m} | Total Nodes: {total_nodes} | Network Availability: {network_availability} | Input SSD Availability: {input_ssd_availability} | "
                    f"SSD_M: {ssd_M} | SSD_K: {ssd_K} | SSD_m: {ssd_m} | Network_m: {network_m} \n")
     if output_file and generate_fault_injection == False:
         with open(output_file, 'a') as f:
@@ -797,4 +810,4 @@ if __name__ == "__main__":
     
     if generate_fault_injection:
         with open(network_injection_file, 'w') as file:
-            file.write(f"{total_an_ssd_up_time / (total_up_time + total_down_time)}")
+            file.write(f"{total_an_ssd_up_time / (total_time)}")

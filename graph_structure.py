@@ -62,30 +62,54 @@ class GraphStructure:
                 #print (start_node_module, node)
                 self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
             if leaf_node_module in node:
+                #if ("backend_module" in leaf_node_module):
+                #    print (node)
                 #print (leaf_node_module, node)
                 self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
-
+    def add_virtual_nodes_for_n_leaf_nodes(self, start_node_module, leaf_node_module, n):
+        self.G.add_node('virtual_source')
+        self.G.add_node('virtual_sink')
+        for node in self.G.nodes():
+            if start_node_module in node:
+                #print (start_node_module, node)
+                self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
+            if leaf_node_module in node:
+                node_index = int(node.split('_')[-1])
+                if node_index > 0 and node_index < n:
+                    self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
+                #print (leaf_node_module, node)
+                self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
     def add_virtual_source(self, start_node_module):
         self.G.add_node('virtual_source')
         for node in self.G.nodes():
             if start_node_module in node:
                 self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
 
-    def remove_virtual_source(self):
-        self.G.remove_node("virtual_source")
+    def add_virtual_sink(self, leaf_node_module, excpetion_nodes = []):
+        self.G.add_node('virtual_sink')
+        for node in self.G.nodes():
+            if leaf_node_module in node and node not in excpetion_nodes:
+                self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
 
-    def add_virtual_ssd_nodes(self, ssd_nodes, leaf_node_module):
+    def remove_virtual_source(self):
+        if (self.G.has_node("virtual_source")):
+            self.G.remove_node("virtual_source")
+
+    def add_virtual_ssd_nodes(self, ssd_nodes, leaf_node_module, edge_value=float(max_edge_value)):
         self.G.add_node('virtual_sink')
         for node in ssd_nodes:
             if leaf_node_module in node and node in self.G.nodes():
-                self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
+                self.G.add_edge(node, 'virtual_sink', capacity=edge_value)
     
     def remove_virtual_sink(self):
-        self.G.remove_node("virtual_sink")
+        if (self.G.has_node("virtual_sink")):
+            self.G.remove_node("virtual_sink")
 
     def remove_virtual_nodes(self):
-        self.G.remove_node('virtual_source')
-        self.G.remove_node('virtual_sink')
+        if (self.G.has_node('virtual_source')):
+            self.G.remove_node('virtual_source')
+        if (self.G.has_node('virtual_sink')):
+            self.G.remove_node('virtual_sink')
     def _create_redundancy_groups(self):
         groups = {}
         for module, (M, K) in self.redundancies.items():
