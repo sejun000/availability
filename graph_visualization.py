@@ -5,12 +5,12 @@ from networkx.drawing.nx_agraph import graphviz_layout
 from graph_structure import GraphStructure
 
 class InteractiveGraph:
-    def __init__(self, graph_structure):
-        self.G = graph_structure.G
-        self.edges = graph_structure.edges
-        self.enclosures = graph_structure.enclosures
-        self.redundancies = graph_structure.redundancies
-        self.redundancy_groups = graph_structure.redundancy_groups
+    def __init__(self, hardware_graph):
+        self.G = hardware_graph.G
+        self.edges = hardware_graph.edges
+        self.enclosures = hardware_graph.enclosures
+        self.redundancies = hardware_graph.redundancies
+        self.redundancy_groups = hardware_graph.redundancy_groups
         self.pos = graphviz_layout(self.G, prog='dot', args='-Goverlap=scale -Gnodesep=22 -Gpad=5')
         self.selected_node = None
         self.selected_node = None
@@ -26,7 +26,7 @@ class InteractiveGraph:
         self.fig.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.fig.canvas.mpl_connect('motion_notify_event', self.on_hover)
         self.center_graph()
-        self.draw_graph(graph_structure)
+        self.draw_graph(hardware_graph)
 
     def center_graph(self):
         pos = self.pos
@@ -40,7 +40,7 @@ class InteractiveGraph:
         
         self.pos = pos
 
-    def draw_graph(self, graph_structure):
+    def draw_graph(self, hardware_graph):
         self.ax.clear()
         edge_colors = ['red' if weight.endswith('G') else 'blue' for _, _, weight in self.edges]
         edge_weights = [self.G[u][v]['capacity'] / 10**9 for u, v in self.G.edges()]  # Adjust the edge weight for better visualization
@@ -128,14 +128,8 @@ class InteractiveGraph:
         pass
 
 if __name__ == "__main__":
-    file_path = '3tier.xlsx'
-    sheet_name = 'HW Architecture'
-    start_cell = ('B', 2)  # Corresponds to cell B2
-    enclosure_start_cell = ('F', 2)  # Corresponds to cell F2
-    availability_sheet = 'Availability'
-    redundancy_sheet = 'Redundancy'
-
-    edges, enclosures, availabilities, redundancies, mttfs, mtrs = GraphStructure.parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet)
-    graph_structure = GraphStructure(edges, enclosures, availabilities, redundancies, mttfs, mtrs)
-    interactive_graph = InteractiveGraph(graph_structure)
+    file_path = 'graph.json'
+    edges, enclosures, redundancies, mttfs, mtrs, _ = GraphStructure.parse_input_from_json(file_path)
+    hardware_graph = GraphStructure(edges, enclosures, redundancies, mttfs, mtrs)
+    interactive_graph = InteractiveGraph(hardware_graph)
     plt.show()

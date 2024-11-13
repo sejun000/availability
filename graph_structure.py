@@ -1,21 +1,21 @@
 import pandas as pd
 import networkx as nx
 from networkx.algorithms.flow import edmonds_karp
+import json
+
 
 max_edge_value = 1_000_000_000_000_000 * 1.0
 
 class GraphStructure:
-    def __init__(self, edges = None, enclosures = None, availabilities = None, redundancies = None, mttfs = None, mtrs = None):
+    def __init__(self, edges = None, enclosures = None, redundancies = None, mttfs = None, mtrs = None):
         if edges is None:
             self.__init_test()
             return
         self.G = nx.DiGraph()
         self.edges = edges
         self.enclosures = enclosures
-        self.availabilities = availabilities
         self.redundancies = redundancies
         self._add_edges()
-        self._add_availabilities()
         self.redundancy_groups = self._create_redundancy_groups()
         self.mttfs = mttfs
         self.mtrs = mtrs
@@ -130,6 +130,50 @@ class GraphStructure:
         #print (groups)
         return groups
     @staticmethod
+
+    def parse_input_from_json(file_path):
+        """
+        JSON 파일로부터 데이터를 파싱하여 edges, enclosures, availabilities, redundancies, mttfs, mtrs를 반환합니다.
+        
+        Parameters:
+            file_path (str): JSON 파일의 경로.
+            
+        Returns:
+            tuple: (edges, enclosures, availabilities, redundancies, mttfs, mtrs)
+        """
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Edges: List of tuples (start, end, weight)
+        edges = []
+        for edge in data.get("edges", []):
+            start = edge.get("start")
+            end = edge.get("end")
+            weight = edge.get("bandwidth")
+            if start is not None and end is not None and weight is not None:
+                edges.append((start, end, weight))
+        
+        # Enclosures: Dict of enclosure name to list of nodes
+        enclosures = data.get("enclosures", {})
+                
+        # MTTFs: Dict of module to MTTF
+        mttfs = data.get("mttf", {})
+        
+        # MTRs: Dict of module to MTR
+        mtrs = data.get("mtr", {})
+        
+        # Redundancies: Dict of module to tuple (M, K)
+        redundancies = {}
+        for module, redundancy in data.get("redundancies", {}).items():
+            M = redundancy.get("M")
+            K = redundancy.get("K")
+            if M is not None and K is not None:
+                redundancies[module] = (M, K)
+        
+        options = data.get("options", {})
+        return edges, enclosures, redundancies, mttfs, mtrs, options
+
+    @staticmethod
     def parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet):
         df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
         start_row = start_cell[1] - 1
@@ -155,8 +199,7 @@ class GraphStructure:
             enclosures[enclosure] = nodes
 
         avail_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,C,D,E,F,G")
-        availabilities = {str(row['module']): row['Availability'] for _, row in avail_df.iterrows()}
         mttfs = {str(row['module']): row['MTTF'] for _, row in avail_df.iterrows()}
         mtrs = {str(row['module']): row['MTR'] for _, row in avail_df.iterrows()}
-        redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}    
-        return edges, enclosures, availabilities, redundancies, mttfs, mtrs
+        redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}
+        return edges, enclosures, redundancies, mttfs, mtrs
