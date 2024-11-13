@@ -6,6 +6,10 @@ import heapq
 import random
 import networkx as nx
 
+import numpy as np
+import matplotlib.pyplot as plt
+import multiprocessing
+
 SSD_module_name = "SSD"
 network_module_name = "network"
 SSD_Enclosure = "NVMeEnclosure"
@@ -215,30 +219,44 @@ def update_failure_info(event_type, event_node, failure_info_per_ssd_group, fail
         elif (event_type == 'repair'):
             failed_nodes_and_enclosures[event_node] = False
 
+def get_SSD_changed_state(failure_info, ssd_k, network_k, disconnected):
+    if judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_intra_rebuilding:
+        return SSD_state_intra_rebuilding
+    elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_inter_rebuilding:
+        return SSD_state_inter_rebuilding
+    elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_data_loss:
+        return SSD_state_data_loss
+    else:
+        return SSD_state_normal
+
+# only SSDs info shall be output and can be modified
+def update_all_ssd_states(failure_info_per_ssd_group, SSDs, m, k, total_ssd_count, network_k, disconnected):
+    for ssd_index in range(0, total_ssd_count):
+        if SSDs[ssd_index]['failed'] == False:
+            continue
+        ssd_group_index = ssd_index // (m + k)
+        failure_info = failure_info_per_ssd_group[get_ssd_group_name(ssd_group_index)]
+        changed_state = get_SSD_changed_state(failure_info, k, network_k, disconnected)
+        SSDs[ssd_index]['state'] = changed_state
 
 def update_ssd_state(ssd_name, failure_info_per_ssd_group, SSDs, capacity, event_type, prep_time_for_rebuilding, m, k, network_k, disconnected):
     ssd_index = get_ssd_index(ssd_name)
     if (event_type == 'fail'):
+        assert SSDs[ssd_index]['failed'] == False
         SSDs[ssd_index]['failed'] = True
         SSDs[ssd_index]['remaining_capacity_to_rebuild'] = capacity
         SSDs[ssd_index]['rebuild_speed'] = 0
-        SSDs[ssd_index]['remaining_prep_time_for_rebuilding'] = prep_time_for_rebuilding
+        SSDs[ssd_index]['remaining_prep_time_for_rebuilding'] = random.expovariate(1 / prep_time_for_rebuilding)
         
     elif (event_type == 'repair'):
+        assert SSDs[ssd_index]['failed'] == True
         SSDs[ssd_index]['failed'] = False
 
     n = m + k
     group_index = ssd_index // n
     failure_info = failure_info_per_ssd_group[get_ssd_group_name(group_index)]
         
-    if judge_state_from_failure_info(failure_info, k, network_k, disconnected) == SSD_state_data_loss:
-        changed_state = SSD_state_data_loss       
-    elif judge_state_from_failure_info(failure_info, k, network_k, disconnected) == SSD_state_inter_degraded:
-        changed_state = SSD_state_inter_rebuilding
-    elif judge_state_from_failure_info(failure_info, k, network_k, disconnected) == SSD_state_intra_rebuilding:
-        changed_state = SSD_state_intra_rebuilding
-    else:
-        changed_state = SSD_state_normal
+    changed_state = get_SSD_changed_state(failure_info, k, network_k, disconnected)
 
     for i in range(group_index * n, group_index * n + n):
         #print (k, failure_info['failure_count'], network_k)
@@ -246,13 +264,10 @@ def update_ssd_state(ssd_name, failure_info_per_ssd_group, SSDs, capacity, event
             continue
         #print ("changed", state_updated_ssd_name, changed_state)
         assert changed_state != SSD_state_normal
-        SSDs[i]['state'] = changed_state
+        SSDs[i]['state'] = changed_state    
 
-def push_failed_event(failed_events, event_node, current_time, node_to_module_map, hardware_graph, ssd_mttf, network_mttf):
-    if (network_module_name in event_node):
-        assert False
-        mttf = network_mttf
-    elif (SSD_module_name in event_node):
+def push_failed_event(failed_events, event_node, current_time, node_to_module_map, hardware_graph, ssd_mttf):
+    if (SSD_module_name in event_node):
         mttf = ssd_mttf
     else:
         module = node_to_module_map[event_node]
@@ -262,7 +277,6 @@ def push_failed_event(failed_events, event_node, current_time, node_to_module_ma
 
 def push_repair_event(repair_events, event_node, current_time, node_to_module_map, hardware_graph):
     if (SSD_module_name in event_node):
-        big_number = 1_000_000_000_000_000
         heapq.heappush(repair_events, (current_time + big_number, 'repair', event_node, current_time))
         # update_repair_event_for_SSDs shall be called right after this function
     else:
@@ -309,7 +323,11 @@ def update_repair_event_for_SSDs(repair_events, current_time, SSDs, flows_and_sp
         network_failure_count = failure_info_per_ssd_group[get_ssd_group_name(ssd_group_index)]['network_failure_count']
         #print (ssd_index, repair_node, current_ssd_info, flows_and_speed_entry['intra_rebuilding_bw'], failure_info_per_ssd_group)
         if (current_ssd_info['state'] == SSD_state_intra_rebuilding): # it can be reconstructed
-            rebuild_speed = flows_and_speed_entry['intra_rebuilding_bw'][ssd_failure_count]
+            try:
+                rebuild_speed = flows_and_speed_entry['intra_rebuilding_bw'][ssd_failure_count]
+            except:
+                print (repair_node, current_ssd_info, ssd_failure_count, flows_and_speed_entry, failure_info_per_ssd_group)
+                assert False
         elif (current_ssd_info['state'] == SSD_state_inter_rebuilding):
             rebuild_speed = flows_and_speed_entry['inter_rebuilding_bw'][network_failure_count]
         elif (current_ssd_info['state'] == SSD_state_data_loss):
@@ -321,6 +339,10 @@ def update_repair_event_for_SSDs(repair_events, current_time, SSDs, flows_and_sp
         assert (rebuild_speed > 0)
         rebuild_speed_per_hour = rebuild_speed * 3600
         updated_repair_event_time = current_ssd_info['remaining_prep_time_for_rebuilding'] + current_ssd_info['remaining_capacity_to_rebuild'] / rebuild_speed_per_hour
+        #updated_repair_event_time = 1 / updated_repair_event_time)
+        if (updated_repair_event_time < 0):
+            print (repair_node, current_ssd_info, rebuild_speed, current_ssd_info['remaining_prep_time_for_rebuilding'], current_ssd_info['remaining_capacity_to_rebuild'])
+            assert False
         updated_repair_events.append((current_time + updated_repair_event_time, 'repair', repair_node, current_time))
 
     for event in updated_repair_events:
@@ -368,7 +390,57 @@ def get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group):
         frozen_set_list.append(frozenset([ssd_group_name, frozenset(failure_info.items())]))
     return frozenset([get_key1(failed_nodes_and_enclosures), frozenset(frozen_set_list)])
 
-def monte_carlo_simulation(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssd_count, network_m, network_k, df, write_bw, read_bw, graph_structure_origin, batch_size, options):
+def monte_carlo_simulation(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssd_count, network_m, network_k, df, write_bw, read_bw, graph_structure_origin, batch_size, options):
+    procs = 40 #os.cpu_count()
+    batch_size = (batch_size + procs - 1) // procs
+    jobs = []
+    queue = multiprocessing.Queue(maxsize=100000000)
+    for i in range(0, procs):
+        process = multiprocessing.Process(target=simulation_per_core, 
+                                          args=(i, guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssd_count, network_m, network_k, df, write_bw, read_bw, graph_structure_origin, batch_size, options, queue))
+        jobs.append(process)
+
+    # Start the processes (i.e. calculate the random number lists)      
+    for j in jobs:
+        j.start()
+
+    # Ensure all of the processes have finished
+    received = 0
+    results_from_proc = []
+    while True:
+        result = queue.get()
+        if (result != None):
+            results_from_proc.append(result)
+            received +=1
+        if received == procs:
+            break
+    for j in jobs:
+        j.join()
+    total_up_time = 0
+    total_time = 0
+    total_effective_up_time = 0
+    total_mttf_count = 0
+    total_mttf_time = 0
+    total_mtr_count = 0
+    total_mtr_time = 0
+
+    for up_time, simulation_time, effective_up_time, first_ssd_group_mttf, mttf_count, first_ssd_group_mtr, mtr_count in results_from_proc:
+        total_up_time += up_time
+        total_time += simulation_time
+        total_effective_up_time += effective_up_time
+        total_mttf_count += mttf_count
+        total_mttf_time += first_ssd_group_mttf
+        total_mtr_count += mtr_count
+        total_mtr_time += first_ssd_group_mtr
+    results['up_time'] = total_up_time
+    results['simulation_time'] = total_time
+    results['effective_up_time'] = total_effective_up_time
+    results['network_mttf'] = total_mttf_time / total_mttf_count
+    results['network_mtr'] = total_mtr_time / total_mtr_count
+    results['availability'] = total_up_time / total_time
+    results['effective_availability'] = total_effective_up_time / total_time
+    
+def simulation_per_core(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssd_count, network_m, network_k, df, write_bw, read_bw, graph_structure_origin, batch_size, options, queue):
     # In static analysis, standby_ssd is not considered
     n = m + k
     ssd_mttf = guaranteed_years * 365 * 24 * dwpd_limit / dwpd
@@ -389,8 +461,6 @@ def monte_carlo_simulation(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, d
     total_time = 0
     total_effective_up_time = 0
     completed = 0
-    last_event_time_stamp_for_first_ssd_group = 0
-    last_state_for_first_ssd_group = SSD_state_normal
     first_ssd_group_mttfs = []
     first_ssd_group_mtrs = []
 
@@ -444,6 +514,10 @@ def monte_carlo_simulation(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, d
         calculate_flows_and_speed(df, failed_hardware_graph_table[key1], failure_info_per_ssd_group, m, k, total_ssd_count, network_m, network_k, read_bw, write_bw, options, flows_and_speed_table, key2)
         simulation_hours = options["simulation_years"] * 365 * 24
 
+        last_disconnected = True
+        last_event_time_stamp_for_first_ssd_group = 0
+        last_state_for_first_ssd_group = SSD_state_normal
+
         # Process events
         while(1):    
             event_time, event_type, event_node, temp = pop_event(failed_events, repair_events)
@@ -470,22 +544,30 @@ def monte_carlo_simulation(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, d
                 break
             
             if (last_state_for_first_ssd_group == SSD_state_normal and judge_state_from_failure_info(failure_info_per_ssd_group[get_ssd_group_name(0)], k, network_k, disconnected_table[key1]) == SSD_state_data_loss):
+            #if (last_state_for_first_ssd_group == SSD_state_normal and SSDs[0]['failed'] == True):    
+                assert (event_time - last_event_time_stamp_for_first_ssd_group  >= 0)
                 first_ssd_group_mttfs.append(event_time - last_event_time_stamp_for_first_ssd_group)
                 last_event_time_stamp_for_first_ssd_group = event_time
                 last_state_for_first_ssd_group = SSD_state_data_loss
             elif (last_state_for_first_ssd_group == SSD_state_data_loss and judge_state_from_failure_info(failure_info_per_ssd_group[get_ssd_group_name(0)], k, network_k, disconnected_table[key1]) != SSD_state_data_loss):
+            #elif (last_state_for_first_ssd_group == SSD_state_data_loss and SSDs[0]['failed'] == False):    
                 first_ssd_group_mtrs.append(event_time - last_event_time_stamp_for_first_ssd_group)
                 last_event_time_stamp_for_first_ssd_group = event_time
                 last_state_for_first_ssd_group = SSD_state_normal
+   
             update_failure_info(event_type, event_node, failure_info_per_ssd_group, failed_nodes_and_enclosures, n)
-            if (SSD_module_name in event_node):
-                update_ssd_state(event_node, failure_info_per_ssd_group, SSDs, capacity, event_type, options["prep_time_for_rebuilding"], m, k, network_k, disconnected_table[key1])
 
             key1 = get_key1(failed_nodes_and_enclosures)
             calculate_hardware_graph(hardware_graph, failed_nodes_and_enclosures, enclosure_to_node_map, options, failed_hardware_graph_table, disconnected_table, key1)
             key2 = get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group)
             calculate_flows_and_speed(df, failed_hardware_graph_table[key1], failure_info_per_ssd_group, m, k, total_ssd_count, network_m, network_k, read_bw, write_bw, options, flows_and_speed_table, key2)
-
+            disconnected = disconnected_table[key1]
+            if (SSD_module_name in event_node):
+                update_ssd_state(event_node, failure_info_per_ssd_group, SSDs, capacity, event_type, options["prep_time_for_rebuilding"], m, k, network_k, disconnected)
+            if (last_disconnected != disconnected):
+                update_all_ssd_states(failure_info_per_ssd_group, SSDs, m, k, total_ssd_count, network_k, disconnected)
+                last_disconnected = disconnected
+                
             #if (not leaf_node_module in event_node):
             if event_type == 'fail':
                 push_repair_event(repair_events, event_node, event_time, node_to_module_map, hardware_graph)
@@ -508,8 +590,28 @@ def monte_carlo_simulation(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, d
         if (simulation_idx == 0 and (completed * 100) % batch_size == 0):
             print ("completed "+ str(completed * 100 // batch_size) + "%")
         assert (timestamp >= simulation_hours - 1 and timestamp <= simulation_hours + 1)
-    print (total_up_time, total_time, total_effective_up_time, total_up_time / total_time, total_effective_up_time / total_time)
-    print (first_ssd_group_mttfs, first_ssd_group_mtrs) 
-    #   queue.put((total_up_time, total_down_time, total_effective_up_time, total_an_ssd_up_time, max_flow_cdf))
+    #print (total_up_time, total_time, total_effective_up_time, total_up_time / total_time, total_effective_up_time / total_time)
+    first_ssd_group_mttf = 0
+    first_ssd_group_mtr = 0
+    if len(first_ssd_group_mttfs) != 0:
+        first_ssd_group_mttf = sum(first_ssd_group_mttfs)
+    if len(first_ssd_group_mtrs) != 0:
+        first_ssd_group_mtr = sum(first_ssd_group_mtrs)
+    queue.put((total_up_time, total_time, total_effective_up_time, first_ssd_group_mttf, len(first_ssd_group_mttfs), first_ssd_group_mtr, len(first_ssd_group_mtrs)))
+    
+    # 데이터 정렬
+    sorted_data = np.sort(first_ssd_group_mttfs)
+    #print (first_ssd_group_mttfs)
+    #print (sorted_data)
+    # 누적 확률 계산
+    cdf = np.arange(1, len(sorted_data) + 1) / len(sorted_data)
+
+    # CDF 플롯
+    plt.plot(sorted_data, cdf, marker='o', linestyle='-')
+    plt.xlabel("Data Value")
+    plt.ylabel("Cumulative Probability")
+    plt.title("CDF of Given Data List")
+    plt.grid(True)
+    plt.show()
     return ""
     

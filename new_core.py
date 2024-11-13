@@ -100,8 +100,8 @@ if __name__ == "__main__":
     if (simulation):
         edges, enclosures, redundancies, mttfs, mtrs, options = GraphStructure.parse_input_from_json(args.graph_structure_file)
         hardware_graph = GraphStructure(edges, enclosures, redundancies, mttfs, mtrs)
-        batch_size = 1000
-        sim.monte_carlo_simulation(0, guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssds, network_m, network_k, df, write_bw, read_bw, hardware_graph, batch_size, options)
+        batch_size = 40000
+        sim.monte_carlo_simulation(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssds, network_m, network_k, df, write_bw, read_bw, hardware_graph, batch_size, options)
         print (edges, enclosures, redundancies, mttfs, mtrs)
     else:
         test_static_analyze_ssd_only(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, n, df, write_bw)
