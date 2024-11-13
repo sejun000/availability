@@ -100,7 +100,7 @@ if __name__ == "__main__":
     if (simulation):
         edges, enclosures, redundancies, mttfs, mtrs, options = GraphStructure.parse_input_from_json(args.graph_structure_file)
         hardware_graph = GraphStructure(edges, enclosures, redundancies, mttfs, mtrs)
-        batch_size = 40000
+        batch_size = 100000
         sim.monte_carlo_simulation(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssds, network_m, network_k, df, write_bw, read_bw, hardware_graph, batch_size, options)
         print (edges, enclosures, redundancies, mttfs, mtrs)
     else:
