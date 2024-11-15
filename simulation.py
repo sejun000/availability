@@ -15,8 +15,6 @@ SSD_module_name = "SSD"
 network_module_name = "network"
 SSD_Enclosure = "NVMeEnclosure"
 
-backup_reconstruction_speed = 200_000_000
-
 big_number = 1_000_000_000_000_000
 ## SSD state
 SSD_state_normal = "normal"
@@ -70,24 +68,36 @@ def calculate_hardware_graph(hardware_graph, failed_nodes_and_enclosures, enclos
     hardware_graph_copy.add_virtual_nodes(options["start_module"], options["end_module"])
     connected = nx.has_path(hardware_graph_copy.G, 'virtual_source', 'virtual_sink')
     hardware_graph_copy.remove_virtual_nodes()
-    disconnected_table[key1] = not connected
+    disconnected_table[key1] = {}
+    disconnected_table[key1]['local_module'] = not connected
+    hardware_graph_copy.add_virtual_nodes(options["start_module"], options["lowest_common_module"])
+    connected = nx.has_path(hardware_graph_copy.G, 'virtual_source', 'virtual_sink')
+    hardware_graph_copy.remove_virtual_nodes()
+    disconnected_table[key1]['common_module'] = not connected
     failed_hardware_graph_table[key1] = hardware_graph_copy
 
-def is_catastrophic_failure(failure_info, ssd_k, disconnected):
-    return failure_info['failure_count'] > ssd_k or disconnected
+def is_catastrophic_failure(failure_info, ssd_k, local_module_disconnected):
+    return failure_info['failure_count'] > ssd_k or local_module_disconnected == True
 
+def is_other_nodes_catastrophic_failure_and_recoverable(failure_info, ssd_k, network_k, disconnected):
+    if (failure_info['network_failure_count'] > 0 and (not is_catastrophic_failure(failure_info, ssd_k, disconnected)) and failure_info['network_failure_count'] <= network_k and network_k > 0):
+        return True
+    
 def judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected):
-    if failure_info['failure_count'] > 0 and (not is_catastrophic_failure(failure_info, ssd_k, disconnected)):
-        return SSD_state_intra_rebuilding
-    elif (is_catastrophic_failure(failure_info, ssd_k, disconnected) and failure_info['network_failure_count'] <= network_k - 1 and network_k > 0):
-        return SSD_state_inter_rebuilding
-    elif (failure_info['network_failure_count'] > 0 and (not is_catastrophic_failure(failure_info, ssd_k, disconnected)) and failure_info['network_failure_count'] <= network_k and network_k > 0):
-        return SSD_state_inter_degraded
-    elif ((network_k > 0 and failure_info['network_failure_count'] > network_k) or (is_catastrophic_failure(failure_info, ssd_k, disconnected) and failure_info['network_failure_count'] > network_k - 1)):
+    if disconnected['common_module']:
         return SSD_state_data_loss
+    local_module_disconnected = disconnected['local_module']
+    if failure_info['failure_count'] > 0 and (not is_catastrophic_failure(failure_info, ssd_k, local_module_disconnected)):
+        return SSD_state_intra_rebuilding
+    elif (is_catastrophic_failure(failure_info, ssd_k, local_module_disconnected) and failure_info['network_failure_count'] <= network_k - 1 and network_k > 0):
+        return SSD_state_inter_rebuilding
+    elif ((network_k > 0 and failure_info['network_failure_count'] > network_k) or (is_catastrophic_failure(failure_info, ssd_k, local_module_disconnected) and failure_info['network_failure_count'] > network_k - 1)):
+        return SSD_state_data_loss
+    else:
+        return SSD_state_normal
 # input : failed_hardware_graph_table, ssd groups' failure
 # output : flows_and_speed_table
-def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_group, ssd_m, ssd_k, ssd_total_count, network_m, network_k, ssd_read_bw, ssd_write_bw, options, flows_and_speed_table, key2):
+def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_group, ssd_m, ssd_k, ssd_total_count, network_m, network_k, ssd_read_bw, ssd_write_bw, options, flows_and_speed_table, disconnected, key2):
     # local rebuild
     if (key2 in flows_and_speed_table):
         return
@@ -95,6 +105,7 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
     tables = {}
     tables['intra_rebuilding_bw'] = {}
     tables['inter_rebuilding_bw'] = {}
+    tables['backup_rebuild_speed'] = 0
     tables['max_read_performance'] = {}
     availability_ratio = 1
 
@@ -117,10 +128,8 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
     # common module's flow is shared by all network nodes, so we need to divide it by the number of network nodes
     bottleneck_read_bw = min(bottleneck_read_bw, common_module_max_flow / (network_m + network_k))
     bottleneck_read_bw_per_ssd = bottleneck_read_bw / normal_ssds_count
-  #  print (bottleneck_read_bw, total_read_bw_for_ssds, common_module_max_flow, hardware_max_flow)
-    
+    #print (bottleneck_read_bw, total_read_bw_for_ssds, common_module_max_flow, hardware_max_flow)
   #  print (bottleneck_read_bw, total_read_bw_for_ssds)
-    disconnected = (bottleneck_read_bw == 0)
     for failure_info in failure_info_per_ssd_group.values():
         # failed ssd shall be read from the other ssds
         if judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_intra_rebuilding:
@@ -133,31 +142,31 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
         # catastrophic failure for the simulated nodes
         elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_inter_rebuilding:
             # failed ssd shall be read from the other network
+            # we can assume that another network nodes also have similar status with the simulated nodes,
+            # so we use bottlenck_read_bw_per_ssd as other degraded bw for the other network nodes
             degraded_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'] + 1, [bottleneck_read_bw_per_ssd], options)
             rebuilding_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'] + 1, [bottleneck_read_bw_per_ssd, ssd_write_bw], options)
-            tables['inter_rebuilding_bw'][failure_info['network_failure_count'] + 1] = rebuilding_bw
-            # read from catastrophic ssd is same as the bottleneck read bw
+            tables['inter_rebuilding_bw'][failure_info['network_failure_count']] = rebuilding_bw
+        # data loss because of catastrophic failure is more than network_k
+        elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_data_loss:
+            rebuilding_bw = calculate_bottleneck_speed(df, network_m, 0, [bottleneck_read_bw_per_ssd, ssd_write_bw], options)
+            tables['backup_rebuild_speed'] = rebuilding_bw
+            #print (disconnected, bottleneck_read_bw_per_ssd, rebuilding_bw)
+            # all read is removed from data loss failure, but bottleneck read bw is not changed (it is used for other ssds)
+            total_read_bw_for_ssds = total_read_bw_for_ssds - ssd_read_bw * (ssd_m + ssd_k)
+            availability_ratio -= (ssd_m + ssd_k) / ssd_total_count
 
-        # catastrophic failure for the other nodes
-        elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_inter_degraded:
+        # catastrophic failure for the other nodes. reduce the read bw for the simulated nodes
+        if is_other_nodes_catastrophic_failure_and_recoverable(failure_info, ssd_k, network_k, disconnected):
              # failed ssd shall be read from this network to rebuild
             degraded_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'], [bottleneck_read_bw_per_ssd], options)
-            rebuilding_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'], [bottleneck_read_bw_per_ssd, ssd_write_bw], options)
-            tables['inter_rebuilding_bw'][failure_info['network_failure_count']] = rebuilding_bw
             degraded_ssd_count = ssd_m - failure_info['failure_count']
             bottleneck_read_bw = bottleneck_read_bw - (bottleneck_read_bw_per_ssd - degraded_bw) * degraded_ssd_count
 
-        # data loss because of catastrophic failure is more than network_k
-        elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_data_loss:
-            tables['inter_rebuilding_bw'][failure_info['network_failure_count']] = backup_reconstruction_speed
-            degraded_ssd_count = ssd_m - failure_info['failure_count']
-            # all read is removed from data loss failure 
-            bottleneck_read_bw = bottleneck_read_bw - degraded_ssd_count * bottleneck_read_bw_per_ssd
-            availability_ratio -= (ssd_m + ssd_k) / ssd_total_count
-    
     max_read_performance = min(bottleneck_read_bw, total_read_bw_for_ssds)
+    #print (max_read_performance)
     tables['max_read_performance'] = max_read_performance
-    tables['availabiltiy_ratio'] = availability_ratio
+    tables['availability_ratio'] = availability_ratio
     flows_and_speed_table[key2] = tables
 
 def generate_first_failure_events(hardware_graph, node_to_module_map, ssd_total_count, n, ssd_mttf, network_mttf_table):
@@ -173,15 +182,15 @@ def generate_first_failure_events(hardware_graph, node_to_module_map, ssd_total_
     #    push_failed_event(events, get_network_group_name(network_index), 0, node_to_module_map, hardware_graph, ssd_mttf, network_mttf_table)
     return events
 
-def calculate_bottleneck_speed(df, m, k, other_bws, options):
+def calculate_bottleneck_speed(df, m, k, other_bws, options, use_erasure_coding = True):
     erasure_coding_latency = 0.00001
-    if (k > 0):
+    if (k > 0 and use_erasure_coding):
         erasure_coding_latency = df[(df['n'] == m) & (df['k'] == k)]['Encoding Time'].values[0] / 1000 / 1000
     erasure_coding_speed = 256_000 / erasure_coding_latency
     min_speed = erasure_coding_speed
     for other_bw in other_bws:
         if (other_bw * options["rebuild_bw_ratio"] < min_speed):
-            min_speed = other_bw
+            min_speed = other_bw * options["rebuild_bw_ratio"]
     return min_speed
 
 def pop_event(events, repair_events):
@@ -214,14 +223,7 @@ def update_failure_info(event_type, event_node, failure_info_per_ssd_group, fail
             failed_nodes_and_enclosures[event_node] = False
 
 def get_SSD_changed_state(failure_info, ssd_k, network_k, disconnected):
-    if judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_intra_rebuilding:
-        return SSD_state_intra_rebuilding
-    elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_inter_rebuilding:
-        return SSD_state_inter_rebuilding
-    elif judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected) == SSD_state_data_loss:
-        return SSD_state_data_loss
-    else:
-        return SSD_state_normal
+    return judge_state_from_failure_info(failure_info, ssd_k, network_k, disconnected)
 
 # only SSDs info shall be output and can be modified
 def update_all_ssd_states(failure_info_per_ssd_group, SSDs, m, k, total_ssd_count, network_k, disconnected):
@@ -269,15 +271,20 @@ def generate_network_failure_table(network_n, availability_without_network_parit
     for failed_count in range(0, network_n):
         probability += combinations_count(network_n - 1, failed_count) * ((1 - single_availability) ** failed_count) * ((single_availability) ** (network_n - 1 - failed_count))
         network_mttf_table[failed_count] = probability
+    #print (network_mttf_table)
 
 def update_network_state(failure_info_per_ssd_group, n, total_ssd_count, network_n, network_mttf_table):
+    changed = False
     random_value = random.uniform(0, 1)
     for group_index in range(0, total_ssd_count // n):
         failure_info = failure_info_per_ssd_group[get_ssd_group_name(group_index)]
         for failed_count in range(0, network_n):
             if (random_value <= network_mttf_table[failed_count]):
-                failure_info['network_failure_count'] = failed_count
-                break   
+                if failed_count != failure_info['network_failure_count']:
+                    failure_info['network_failure_count'] = failed_count
+                    changed = True
+                break
+    return changed
 
 def push_failed_event(failed_events, event_node, current_time, node_to_module_map, hardware_graph, ssd_mttf):
     if (SSD_module_name in event_node):
@@ -326,7 +333,7 @@ def update_repair_event_for_SSDs(repair_events, current_time, SSDs, flows_and_sp
             rebuild_speed = current_ssd_info['rebuild_speed']
             rebuild_speed_per_hour = rebuild_speed * 3600
             remaining_capacity_to_rebuild = current_ssd_info['remaining_capacity_to_rebuild'] - remaining_consumed_time * rebuild_speed_per_hour
-            assert remaining_capacity_to_rebuild >= 0
+            assert remaining_capacity_to_rebuild >= -0.1
             current_ssd_info['remaining_capacity_to_rebuild'] = remaining_capacity_to_rebuild    
             #print (repair_node, current_time, repair_time, updated_repair_time, case_flag)
         # change rebuild speed to the current state
@@ -342,14 +349,20 @@ def update_repair_event_for_SSDs(repair_events, current_time, SSDs, flows_and_sp
                 print (repair_node, current_ssd_info, ssd_failure_count, flows_and_speed_entry, failure_info_per_ssd_group)
                 assert False
         elif (current_ssd_info['state'] == SSD_state_inter_rebuilding):
-            rebuild_speed = flows_and_speed_entry['inter_rebuilding_bw'][network_failure_count]
+            try:
+                rebuild_speed = flows_and_speed_entry['inter_rebuilding_bw'][network_failure_count]
+            except:
+                print (repair_node, current_ssd_info, network_failure_count, flows_and_speed_entry, failure_info_per_ssd_group)
+                assert False
         elif (current_ssd_info['state'] == SSD_state_data_loss):
-            rebuild_speed = backup_reconstruction_speed
+            rebuild_speed = flows_and_speed_entry['backup_rebuild_speed']
         else:
             assert False
         current_ssd_info['rebuild_speed'] = rebuild_speed
         assert (current_ssd_info['remaining_prep_time_for_rebuilding'] >= 0)
-        assert (rebuild_speed > 0)
+        if (rebuild_speed == 0):
+            # it may be disconnected, so, set rebuild_speed as small value now
+            rebuild_speed = 1 / big_number
         rebuild_speed_per_hour = rebuild_speed * 3600
         updated_repair_event_time = current_ssd_info['remaining_prep_time_for_rebuilding'] + current_ssd_info['remaining_capacity_to_rebuild'] / rebuild_speed_per_hour
         #updated_repair_event_time = 1 / updated_repair_event_time)
@@ -400,11 +413,11 @@ def get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group):
     frozen_set_list = []
     for ssd_group_name, failure_info in failure_info_per_ssd_group.items():
         #print (frozenset([ssd_group_name, frozenset(failure_info.items())]))
-        frozen_set_list.append(frozenset([ssd_group_name, frozenset(failure_info.items())]))
+        frozen_set_list.append(frozenset(failure_info.items()))
     return frozenset([get_key1(failed_nodes_and_enclosures), frozenset(frozen_set_list)])
 
 def monte_carlo_simulation(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssd_count, network_m, network_k, df, write_bw, read_bw, graph_structure_origin, batch_size, options):
-    procs = 40 #os.cpu_count()
+    procs = 20 #os.cpu_count()
     batch_size = (batch_size + procs - 1) // procs
     jobs = []
     queue = multiprocessing.Queue(maxsize=100000000)
@@ -443,6 +456,11 @@ def monte_carlo_simulation(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capac
     results['effective_up_time'] = total_effective_up_time
     results['availability'] = total_up_time / total_time
     results['effective_availability'] = total_effective_up_time / total_time
+    print (results)
+    if (network_k == 0):
+        # open "last_avail.txt" file and write the availability
+        with open(options["avail_file"], "w") as f:
+            f.write(str(results['availability']))
     
 def simulation_per_core(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssd_count, network_m, network_k, df, write_bw, read_bw, graph_structure_origin, batch_size, options, queue):
     # In static analysis, standby_ssd is not considered
@@ -465,9 +483,6 @@ def simulation_per_core(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, dwpd
     total_time = 0
     total_effective_up_time = 0
     completed = 0
-    first_ssd_group_mttfs = []
-    first_ssd_group_mtrs = []
-    network_failure_table = {}
 
     for enclosure in list(hardware_graph.enclosures):
         for module in hardware_graph.mttfs.keys():
@@ -483,109 +498,123 @@ def simulation_per_core(simulation_idx, guaranteed_years, use_tbwpd, tbwpd, dwpd
     for group, (nodes, M) in hardware_graph.redundancy_groups.items():
         for node in nodes:
             node_to_group_map[node] = group
-    availability_without_network_parity = 0.99996
+    # open avail file and read the availability
+    availability_without_network_parity = 0
+    try:
+        with open(options["avail_file"], "r") as f:
+            availability_without_network_parity = float(f.readline())
+    except:
+        assert (network_k == 0)
+    #availability_without_network_parity = 0.998
+    
     generate_network_failure_table(network_m + network_k, availability_without_network_parity, network_mttf_table)
 
-    for _ in range(0, batch_size):
-        SSDs = {}
-        for index in range(0, total_ssd_count):
-            SSDs[index] = {}
-            SSDs[index]['failed'] = False
-            SSDs[index]['remaining_prep_time_for_rebuilding'] = 0
-            SSDs[index]['remaining_capacity_to_rebuild'] = 0
-            SSDs[index]['rebuild_speed'] = 0
-
-        up_time = 0
-        effective_up_time = 0
-        timestamp = 0
-        failed_events = []
-        repair_events = []
-        
-        failed_nodes_and_enclosures = OrderedDict()
-        failure_info_per_ssd_group = OrderedDict()
-        for node in list(hardware_graph.G.nodes()):
-            failed_nodes_and_enclosures[node] = False
-        for i in range(0, total_ssd_count // n):
-            ssd_group_name = get_ssd_group_name(i)
-            failure_info_per_ssd_group[ssd_group_name] = {}
-            failure_info_per_ssd_group[ssd_group_name]['failure_count'] = 0
-            failure_info_per_ssd_group[ssd_group_name]['network_failure_count'] = 0
-           
-        # Generate failure and repair events
-        failed_events = generate_first_failure_events(hardware_graph, node_to_module_map, total_ssd_count, n, ssd_mttf, network_mttf_table)
-        prev_time = 0
-        # maximum flow for initial state
-        key1 = get_key1(failed_nodes_and_enclosures)
-        key2 = get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group)
-        calculate_hardware_graph(hardware_graph, failed_nodes_and_enclosures, enclosure_to_node_map, options, failed_hardware_graph_table, disconnected_table, key1)
-        calculate_flows_and_speed(df, failed_hardware_graph_table[key1], failure_info_per_ssd_group, m, k, total_ssd_count, network_m, network_k, read_bw, write_bw, options, flows_and_speed_table, key2)
-        simulation_hours = options["simulation_years"] * 365 * 24
-
-        last_disconnected = True
-        last_event_time_stamp_for_first_ssd_group = 0
-        last_state_for_first_ssd_group = SSD_state_normal
-
-        # Process events
-        while(1):    
-            event_time, event_type, event_node, temp = pop_event(failed_events, repair_events)
-            # Calculate the time difference from the previous event
-            break_flag = False
-            if (event_time > simulation_hours):
-                event_time = simulation_hours
-                break_flag = True
-            time_diff = event_time - prev_time
-            if (time_diff < 0):
-                print (event_type, event_node, event_time, prev_time)
-                assert False
-
-            # Calculate the availability
-            flows_and_speed_entry = flows_and_speed_table[key2]
-            availability_ratio = flows_and_speed_entry['availabiltiy_ratio']
-            effective_availability_ratio = flows_and_speed_entry['max_read_performance'] / max_read_performance_without_any_failure
-            
-            effective_up_time += time_diff * effective_availability_ratio
-            up_time += time_diff * availability_ratio
-            timestamp += time_diff
+    # to reduce remaining time from simulation, we just batch_size as 1 and multiply the simulation time by batch_size
     
-            if (break_flag == True):
-                break
-   
-            update_failure_info(event_type, event_node, failure_info_per_ssd_group, failed_nodes_and_enclosures, n)
-            update_network_state(failure_info_per_ssd_group, n, total_ssd_count, network_m + network_k, network_mttf_table)
+    SSDs = {}
+    for index in range(0, total_ssd_count):
+        SSDs[index] = {}
+        SSDs[index]['failed'] = False
+        SSDs[index]['remaining_prep_time_for_rebuilding'] = 0
+        SSDs[index]['remaining_capacity_to_rebuild'] = 0
+        SSDs[index]['rebuild_speed'] = 0
 
-            key1 = get_key1(failed_nodes_and_enclosures)
-            calculate_hardware_graph(hardware_graph, failed_nodes_and_enclosures, enclosure_to_node_map, options, failed_hardware_graph_table, disconnected_table, key1)
-            key2 = get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group)
-            calculate_flows_and_speed(df, failed_hardware_graph_table[key1], failure_info_per_ssd_group, m, k, total_ssd_count, network_m, network_k, read_bw, write_bw, options, flows_and_speed_table, key2)
-            disconnected = disconnected_table[key1]
-            if (SSD_module_name in event_node):
-                update_ssd_state(event_node, failure_info_per_ssd_group, SSDs, capacity, event_type, options["prep_time_for_rebuilding"], m, k, network_k, disconnected)
-            if (last_disconnected != disconnected):
-                update_all_ssd_states(failure_info_per_ssd_group, SSDs, m, k, total_ssd_count, network_k, disconnected)
-                last_disconnected = disconnected
-                
-            #if (not leaf_node_module in event_node):
-            if event_type == 'fail':
-                push_repair_event(repair_events, event_node, event_time, node_to_module_map, hardware_graph)
-            if event_type == 'repair':
-                push_failed_event(failed_events, event_node, event_time, node_to_module_map, hardware_graph, ssd_mttf)
+    up_time = 0
+    effective_up_time = 0
+    timestamp = 0
+    failed_events = []
+    repair_events = []
+    
+    failed_nodes_and_enclosures = OrderedDict()
+    failure_info_per_ssd_group = OrderedDict()
+    for node in list(hardware_graph.G.nodes()):
+        failed_nodes_and_enclosures[node] = False
+    for i in range(0, total_ssd_count // n):
+        ssd_group_name = get_ssd_group_name(i)
+        failure_info_per_ssd_group[ssd_group_name] = {}
+        failure_info_per_ssd_group[ssd_group_name]['failure_count'] = 0
+        failure_info_per_ssd_group[ssd_group_name]['network_failure_count'] = 0
+        
+    # Generate failure and repair events
+    failed_events = generate_first_failure_events(hardware_graph, node_to_module_map, total_ssd_count, n, ssd_mttf, network_mttf_table)
+    prev_time = 0
+    # maximum flow for initial state
+    
+    last_disconnected = {}
+    last_disconnected['local_module'] = False
+    last_disconnected['common_module'] = False
 
-            flows_and_speed_entry = flows_and_speed_table[key2]
-            #print (key2, flows_and_speed_entry)
-            update_repair_event_for_SSDs(repair_events, event_time, SSDs, flows_and_speed_entry, failure_info_per_ssd_group, n)
-            
-            prev_time = event_time
-            #print (prev_disconnected_ssds)
+    key1 = get_key1(failed_nodes_and_enclosures)
+    key2 = get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group)
+    calculate_hardware_graph(hardware_graph, failed_nodes_and_enclosures, enclosure_to_node_map, options, failed_hardware_graph_table, disconnected_table, key1)
+    calculate_flows_and_speed(df, failed_hardware_graph_table[key1], failure_info_per_ssd_group, m, k, total_ssd_count, network_m, network_k, read_bw, write_bw, options, flows_and_speed_table, last_disconnected, key2)
+    simulation_hours = options["simulation_years"] * 365 * 24
+    percentage = percentage_increasing = 1
+    # Process events
+    while(1):    
+        event_time, event_type, event_node, temp = pop_event(failed_events, repair_events)
+        # Calculate the time difference from the previous event
+        break_flag = False
+        if (event_time > simulation_hours * batch_size):
+            event_time = simulation_hours * batch_size
+            break_flag = True
+        time_diff = event_time - prev_time
+        if (time_diff < 0):
+            print (event_type, event_node, event_time, prev_time)
+            assert False
+
         # Calculate the availability
-        total_up_time += up_time
-        total_time += timestamp
-        #print (timestamp, up_time, effective_availability_ratio, availability_ratio)
-        total_effective_up_time += effective_up_time
-        completed += 1
-        #if (completed % 10000 == 0):
-        if (simulation_idx == 0 and (completed * 100) % batch_size == 0):
-            print ("completed "+ str(completed * 100 // batch_size) + "%")
-        assert (timestamp >= simulation_hours - 1 and timestamp <= simulation_hours + 1)
+        flows_and_speed_entry = flows_and_speed_table[key2]
+        availability_ratio = flows_and_speed_entry['availability_ratio']
+        effective_availability_ratio = flows_and_speed_entry['max_read_performance'] / max_read_performance_without_any_failure
+        
+        effective_up_time += time_diff * effective_availability_ratio
+        up_time += time_diff * availability_ratio
+        timestamp += time_diff
+
+        if (break_flag == True):
+            break
+
+        update_failure_info(event_type, event_node, failure_info_per_ssd_group, failed_nodes_and_enclosures, n)
+        network_state_changed = update_network_state(failure_info_per_ssd_group, n, total_ssd_count, network_m + network_k, network_mttf_table)
+
+        key1 = get_key1(failed_nodes_and_enclosures)
+        calculate_hardware_graph(hardware_graph, failed_nodes_and_enclosures, enclosure_to_node_map, options, failed_hardware_graph_table, disconnected_table, key1)
+        disconnected = disconnected_table[key1]
+
+        key2 = get_key2(failed_nodes_and_enclosures, failure_info_per_ssd_group)
+        calculate_flows_and_speed(df, failed_hardware_graph_table[key1], failure_info_per_ssd_group, m, k, total_ssd_count, network_m, network_k, read_bw, write_bw, options, flows_and_speed_table, disconnected, key2)
+
+        if (SSD_module_name in event_node):
+            update_ssd_state(event_node, failure_info_per_ssd_group, SSDs, capacity, event_type, options["prep_time_for_rebuilding"], m, k, network_k, disconnected)
+        if (frozenset(last_disconnected.items()) != frozenset(disconnected.items()) or network_state_changed):
+            update_all_ssd_states(failure_info_per_ssd_group, SSDs, m, k, total_ssd_count, network_k, disconnected)
+            last_disconnected = disconnected
+    
+        #if (not leaf_node_module in event_node):
+        if event_type == 'fail':
+            push_repair_event(repair_events, event_node, event_time, node_to_module_map, hardware_graph)
+        if event_type == 'repair':
+            push_failed_event(failed_events, event_node, event_time, node_to_module_map, hardware_graph, ssd_mttf)
+
+        flows_and_speed_entry = flows_and_speed_table[key2]
+        #print (key2, flows_and_speed_entry)
+        update_repair_event_for_SSDs(repair_events, event_time, SSDs, flows_and_speed_entry, failure_info_per_ssd_group, n)
+        
+        prev_time = event_time
+        if (simulation_idx == 0 and (event_time * 100) // (simulation_hours * batch_size) > percentage):
+            print ("completed ", percentage ,"%")
+            percentage += percentage_increasing
+
+        #print (prev_disconnected_ssds)
+    # Calculate the availability
+    total_up_time += up_time
+    total_time += timestamp
+    #print (timestamp, up_time, effective_availability_ratio, availability_ratio)
+    total_effective_up_time += effective_up_time
+    completed += 1
+    #if (completed % 10000 == 0):
+    assert (timestamp >= simulation_hours * batch_size - 1 and timestamp <= simulation_hours * batch_size + 1)
 
     queue.put((total_up_time, total_time, total_effective_up_time))
     

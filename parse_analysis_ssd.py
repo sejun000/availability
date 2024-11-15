@@ -3,6 +3,7 @@ import sys
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import math
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='SSD only analysis\' parameters.')
@@ -39,7 +40,29 @@ def parse_file(input_file):
                     # 숫자인 경우 변환
                     if '.' in value:
                         value = float(value)
+                        if (key == 'availability'):
+                            if (value == 1.0):
+                                record['avail_nines'] = 10
+                            else:
+                                avail_nine = -math.log10(1 - value)
+                                record['avail_nines'] = avail_nine
+                        elif (key == 'effective_availability'):
+                            if (value == 1.0):
+                                record['eff_avail_nines'] = 10
+                            else:
+                                eff_avail_nine = -math.log10(1 - value)
+                                record['eff_avail_nines'] = eff_avail_nine
                     else:
+                        if (key == 'network_k'):
+                            if (int(value) == 0):
+                                record['rebuild_type'] = 'intra_only'
+                            elif not 'rebuild_type' in record:
+                                record['rebuild_type'] = 'both'
+                        elif (key == 'k'):
+                            if (int(value) == 0):
+                                record['rebuild_type'] = 'inter_only'
+                            elif not 'rebuild_type' in record:
+                                record['rebuild_type'] = 'both'
                         value = int(value)
                 except ValueError:
                     # 불리언 값 처리
@@ -62,9 +85,15 @@ input_file = args.input_file
 df = parse_file(input_file)
 
 #filtered_df = df[(df['capacity'] == 64_000_000_000_000) & (df['qlc'] == False)]
-filtered_df = df[(df['dwpd'] == 1.0) & (df['qlc'] == False) & (df['tbwpd'] == 1.5)]
+#filtered_df = df[(df['dwpd'] == 1.0) & (df['qlc'] == False) & ((df['network_m'] == 6) and (df['network_k'] == 0))]
+filtered_df = df[
+    (df['dwpd'] == 1.0) &
+    (df['qlc'] == False) &
+    ((df['network_m'] == 6) & (df['network_k'] == 0) | (df['network_k'] > 0))
+]
+
 #filtered_df = df[(df['dwpd'] == 1.0) & (df['qlc'] == False) & (df['capacity'] == 64_000_000_000_000)]
-filtered_df['x'] = filtered_df['m'] / (filtered_df['m'] + filtered_df['k'])
+filtered_df['x'] = filtered_df['m'] / (filtered_df['m'] + filtered_df['k']) * filtered_df['network_m'] / (filtered_df['network_m'] + filtered_df['network_k'])
 
 # dwpd 값에 따른 색상 매핑
 """
@@ -85,28 +114,28 @@ color_map = {
 }
 """
 color_map = {
-    1.5: 'blue',
-    3.3: 'green',
-    4.5: 'orange',
+    'both': 'blue',
+    'intra_only': 'green',
+    'inter_only': 'orange',
 }
 
 
 
 # 색상 리스트 생성
 ## colors = filtered_df['dwpd'].map(color_map).fillna('gray')  # 정의되지 않은 dwpd 값은 회색으로 표시
-colors = filtered_df['capacity'].map(color_map).fillna('gray')  # 정의되지 않은 capacity 값은 회색으로 표시
+colors = filtered_df['rebuild_type'].map(color_map).fillna('gray')  # 정의되지 않은 capacity 값은 회색으로 표시
 
 # 그래프 크기 설정
 plt.figure(figsize=(8, 6))
 
 # 분산 그래프 그리기
 
-for dwpd_value in filtered_df['capacity'].unique():
+for dwpd_value in filtered_df['rebuild_type'].unique():
     # 각 dwpd 값에 해당하는 데이터 선택
-    df_subset = filtered_df[filtered_df['capacity'] == dwpd_value]
-    plt.scatter(df_subset['x'], df_subset['nines'], color=color_map.get(dwpd_value, 'gray'), label=f'capacity={dwpd_value}')
+    df_subset = filtered_df[filtered_df['rebuild_type'] == dwpd_value]
+    plt.scatter(df_subset['x'], df_subset['avail_nines'], color=color_map.get(dwpd_value, 'gray'), label=f'rebuild_type={dwpd_value}')
     for idx, row in df_subset.iterrows():
-       plt.annotate(f"({row['m']},{row['k']})", (row['x'], row['nines']), textcoords="offset points", xytext=(0,10), ha='center')
+       plt.annotate(f"({row['m']},{row['k']},{row['network_m']},{row['network_k']})", (row['x'], row['avail_nines']), textcoords="offset points", xytext=(0,10), ha='center')
 
 # 축 레이블 및 제목 설정
 plt.xlabel('Capcity Ratio')

@@ -15,8 +15,8 @@ def parse_arguments():
     parser.add_argument('--total_ssds', type=int, default=48, help='Total number of SSDs')
     parser.add_argument('--m', type=int, default=15, help='Number of Data chunks')
     parser.add_argument('--k', type=int, default=1, help='Number of Parity chunks')
-    parser.add_argument('--total_network_nodes', type=int, default=16, help='Total number of network nodes')
-    parser.add_argument('--network_m', type=int, default=16, help='Number of Data chunks in network')
+    parser.add_argument('--total_network_nodes', type=int, default=6, help='Total number of network nodes')
+    parser.add_argument('--network_m', type=int, default=6, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
     parser.add_argument('--capacity', type=int, default=64_000_000_000_000, help='Capacity of SSDs')
     parser.add_argument('--qlc', action='store_true', help='Flag to indicate if QLC SSDs are used. default is TLC')
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     if (simulation):
         edges, enclosures, redundancies, mttfs, mtrs, options = GraphStructure.parse_input_from_json(args.graph_structure_file)
         hardware_graph = GraphStructure(edges, enclosures, redundancies, mttfs, mtrs)
-        batch_size = 100000
+        batch_size = 40000
         sim.monte_carlo_simulation(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, results, m, k, total_ssds, network_m, network_k, df, write_bw, read_bw, hardware_graph, batch_size, options)
         print (edges, enclosures, redundancies, mttfs, mtrs)
     else:
