@@ -52,6 +52,12 @@ def parse_file(input_file):
                             else:
                                 eff_avail_nine = -math.log10(1 - value)
                                 record['eff_avail_nines'] = eff_avail_nine
+                        elif (key == 'latency_availability'):
+                            if (value == 1.0):
+                                record['lat_avail_nines'] = 10
+                            else:
+                                lat_avail_nine = -math.log10(1 - value)
+                                record['lat_avail_nines'] = lat_avail_nine
                     else:
                         if (key == 'network_k'):
                             if (int(value) == 0):
@@ -88,8 +94,8 @@ df = parse_file(input_file)
 #filtered_df = df[(df['dwpd'] == 1.0) & (df['qlc'] == False) & ((df['network_m'] == 6) and (df['network_k'] == 0))]
 filtered_df = df[
     (df['dwpd'] == 1.0) &
-    (df['qlc'] == False) &
-    ((df['network_m'] == 6) & (df['network_k'] == 0) | (df['network_k'] > 0))
+    (df['qlc'] == True) &
+    ((df['network_m'] == 8) & (df['network_k'] == 0) | (df['network_k'] > 0))
 ]
 
 #filtered_df = df[(df['dwpd'] == 1.0) & (df['qlc'] == False) & (df['capacity'] == 64_000_000_000_000)]
@@ -130,15 +136,23 @@ plt.figure(figsize=(8, 6))
 
 # 분산 그래프 그리기
 
-for dwpd_value in filtered_df['rebuild_type'].unique():
+y_axis = 'lat_avail_nines'
+
+for value in filtered_df['rebuild_type'].unique():
     # 각 dwpd 값에 해당하는 데이터 선택
-    df_subset = filtered_df[filtered_df['rebuild_type'] == dwpd_value]
-    plt.scatter(df_subset['x'], df_subset['avail_nines'], color=color_map.get(dwpd_value, 'gray'), label=f'rebuild_type={dwpd_value}')
+    df_subset = filtered_df[filtered_df['rebuild_type'] == value]
+    plt.scatter(df_subset['x'], df_subset[y_axis], color=color_map.get(value, 'gray'), label=f'rebuild_type={value}')
     for idx, row in df_subset.iterrows():
-       plt.annotate(f"({row['m']},{row['k']},{row['network_m']},{row['network_k']})", (row['x'], row['avail_nines']), textcoords="offset points", xytext=(0,10), ha='center')
+        if (value == 'both'):
+            plt.annotate(f"({row['m']},{row['k']},{row['network_m']},{row['network_k']})", (row['x'], row[y_axis]), textcoords="offset points", xytext=(0,10), ha='center')
+        elif (value == 'intra_only'):
+            plt.annotate(f"({row['m']},{row['k']})", (row['x'], row[y_axis]), textcoords="offset points", xytext=(0,10), ha='center')
+        elif (value == 'inter_only'):
+            plt.annotate(f"({row['network_m']},{row['network_k']})", (row['x'], row[y_axis]), textcoords="offset points", xytext=(0,10), ha='center')
 
 # 축 레이블 및 제목 설정
 plt.xlabel('Capcity Ratio')
+#plt.ylabel('o')
 plt.ylabel('Nines')
 plt.title('Nines vs capacity ratio')
 

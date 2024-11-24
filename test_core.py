@@ -1,5 +1,5 @@
-from graph_structure import GraphStructure
-from core import _calculate_connected_ssd
+from hardware_graph import GraphStructure
+from core import _g_connected_ssd
 from core import generate_first_failure_events
 from core import count_failed_node
 from core import push_failed_event
@@ -18,14 +18,14 @@ def run_test(test_func):
         print (f"\033[91m{test_func.__name__}: FAIL - {e}\033[0m")
 
 def test_calculate_connected_ssd_case_all_disconnected():
-    graph_structure = GraphStructure()
+    hardware_graph = GraphStructure()
 
     # Set up your graph and enclosures
-    graph_structure.G.add_edge("start1", "ssd1")
-    graph_structure.G.add_edge("start2", "ssd2")
-    graph_structure.G.add_edge("switch0", "start1")
-    graph_structure.G.add_edge("switch0", "start2")
-    graph_structure.enclosures = {
+    hardware_graph.G.add_edge("start1", "ssd1")
+    hardware_graph.G.add_edge("start2", "ssd2")
+    hardware_graph.G.add_edge("switch0", "start1")
+    hardware_graph.G.add_edge("switch0", "start2")
+    hardware_graph.enclosures = {
         "Enclosure1": ["module1", "module2"]
     }
 
@@ -38,7 +38,7 @@ def test_calculate_connected_ssd_case_all_disconnected():
 
     # Call the function
     _calculate_connected_ssd(
-        graph_structure_origin=graph_structure, 
+        graph_structure_origin=hardware_graph, 
         key=key, 
         failed_node=failed_node, 
         lowest_common_level_module=lowest_common_level_module, 
@@ -53,14 +53,14 @@ def test_calculate_connected_ssd_case_all_disconnected():
     print(f"Lowest Common Level Module Connected Table: {lowest_common_level_module_connected_table}")
 
 def test_calculate_connected_ssd_case_parital_connected():
-    graph_structure = GraphStructure()
+    hardware_graph = GraphStructure()
 
     # Set up your graph and enclosures
-    graph_structure.G.add_edge("start1", "ssd1")
-    graph_structure.G.add_edge("start2", "ssd2")
-    graph_structure.G.add_edge("switch0", "start1")
-    graph_structure.G.add_edge("switch0", "start2")
-    graph_structure.enclosures = {
+    hardware_graph.G.add_edge("start1", "ssd1")
+    hardware_graph.G.add_edge("start2", "ssd2")
+    hardware_graph.G.add_edge("switch0", "start1")
+    hardware_graph.G.add_edge("switch0", "start2")
+    hardware_graph.enclosures = {
         "Enclosure1": ["module1", "module2"]
     }
 
@@ -73,7 +73,7 @@ def test_calculate_connected_ssd_case_parital_connected():
 
     # Call the function
     _calculate_connected_ssd(
-        graph_structure_origin=graph_structure, 
+        graph_structure_origin=hardware_graph, 
         key=key, 
         failed_node=failed_node, 
         lowest_common_level_module=lowest_common_level_module, 
@@ -90,10 +90,10 @@ def test_calculate_connected_ssd_case_parital_connected():
 
 def test_generate_first_failure_events():
     # Mock graph structure
-    graph_structure = GraphStructure()
+    hardware_graph = GraphStructure()
 
     # Adding nodes to the graph
-    graph_structure.G.add_nodes_from(["ssd0", "switch0", "ssd1", "switch1"])
+    hardware_graph.G.add_nodes_from(["ssd0", "switch0", "ssd1", "switch1"])
 
     # Matched modules
     matched_module = {
@@ -114,18 +114,18 @@ def test_generate_first_failure_events():
     }
 
     # Mock enclosures in the graph structure
-    graph_structure.enclosures = {
+    hardware_graph.enclosures = {
         "Enclosure0": ["ssd0", "switch0"],
         "Enclosure1": ["switch1"]
     }
 
     # Setting MTTF and MTR for modules
-    graph_structure.mttfs = {
+    hardware_graph.mttfs = {
         "ssd": 1000,  # Mean Time To Failure
         "switch": 2000,
         "Enclosure": 3000
     }
-    graph_structure.mtrs = {
+    hardware_graph.mtrs = {
         "ssd": 50,  # Mean Time To Repair
         "switch": 100,
         "Enclosure": 150
@@ -135,7 +135,7 @@ def test_generate_first_failure_events():
     random.seed(0)  # Seed to make the test deterministic
 
     # Call the function to generate failure events
-    events = generate_first_failure_events(graph_structure, matched_module, matched_enclosure)
+    events = generate_first_failure_events(hardware_graph, matched_module, matched_enclosure)
 
     # Check if the events generated match the expected output
     assert len(events) == len(matched_module), "Number of events doesn't match"
@@ -209,8 +209,8 @@ def test_count_failed_node():
 
 def test_push_failed_event():
     # Mocking graph structure
-    graph_structure = GraphStructure()
-    graph_structure.mttfs = {
+    hardware_graph = GraphStructure()
+    hardware_graph.mttfs = {
         "module1": 1000,  # MTTF for regular module
         "module2": 2000,  # MTTF for SSD module
     }
@@ -226,7 +226,7 @@ def test_push_failed_event():
     random.seed(0)  # To ensure predictable failure time
     
     # Test 1: Push event for a regular node (non-SSD)
-    push_failed_event(failed_events, "node1", 0, matched_module, graph_structure)
+    push_failed_event(failed_events, "node1", 0, matched_module, hardware_graph)
     
     assert len(failed_events) == 1, "Failed event for node1 not added correctly"
     event_time, event_type, event_node, event_current_time = failed_events[0]
@@ -237,7 +237,7 @@ def test_push_failed_event():
 
     # Test 2: Push event for an SSD node
     failed_events = []  # Reset the heap for a clean test
-    push_failed_event(failed_events, "node2", 0, matched_module, graph_structure)
+    push_failed_event(failed_events, "node2", 0, matched_module, hardware_graph)
     
     assert len(failed_events) == 1, "Failed event for SSD node2 not added correctly"
     event_time, event_type, event_node, event_current_time = failed_events[0]
@@ -295,8 +295,8 @@ def test_pop_event():
 
 def test_push_repair_event():
     # Mocking the graph structure
-    graph_structure = GraphStructure()
-    graph_structure.mtrs = {
+    hardware_graph = GraphStructure()
+    hardware_graph.mtrs = {
         "module1": 1000,  # MTR for a regular module
         "ssd": 2000,  # MTR for an SSD module
     }
@@ -328,7 +328,7 @@ def test_push_repair_event():
     time_period = 1000  # Example time period
 
     # Test 1: Regular node repair event
-    push_repair_event(repair_events, "node1", 0, matched_module, matched_group, graph_structure, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
+    push_repair_event(repair_events, "node1", 0, matched_module, matched_group, hardware_graph, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
     assert len(repair_events) == 1, "Failed to add repair event for regular node"
     repair_time, event_type, event_node, event_time = repair_events[0]
     assert event_type == 'repair', "Event type should be 'repair'"
@@ -337,7 +337,7 @@ def test_push_repair_event():
 
     # Test 2: SSD node repair event with rebuild bandwidth
     repair_events = []  # Reset the heap
-    push_repair_event(repair_events, "ssd2", 0, matched_module, matched_group, graph_structure, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
+    push_repair_event(repair_events, "ssd2", 0, matched_module, matched_group, hardware_graph, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
     assert len(repair_events) == 1, "Failed to add repair event for SSD node"
     repair_time, event_type, event_node, event_time = repair_events[0]
     assert event_type == 'repair', "Event type should be 'repair'"
@@ -350,12 +350,12 @@ def test_push_repair_event():
     # Test 3: Disconnected SSD node should not add event
     disconnected_ssds.add("ssd2")
     repair_events = []  # Reset the heap
-    push_repair_event(repair_events, "ssd2", 0, matched_module, matched_group, graph_structure, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
+    push_repair_event(repair_events, "ssd2", 0, matched_module, matched_group, hardware_graph, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
     assert len(repair_events) == 0, "Disconnected SSD should not add a repair event"
 
     # Test 4: Regular node repair event with network rebuild bandwidth
     repair_events = []  # Reset the heap
-    push_repair_event(repair_events, "node1", 0, matched_module, matched_group, graph_structure, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
+    push_repair_event(repair_events, "node1", 0, matched_module, matched_group, hardware_graph, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
     assert len(repair_events) == 1, "Failed to add repair event for regular node"
     repair_time, event_type, event_node, event_time = repair_events[0]
     assert event_type == 'repair', "Event type should be 'repair'"
@@ -372,7 +372,7 @@ def test_push_repair_event():
         "key1": {"ssd_group": 1500}  # Rebuild bandwidth for group2
     }
     disconnected_ssds = []
-    push_repair_event(repair_events, "ssd2", 0, matched_module, matched_group, graph_structure, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
+    push_repair_event(repair_events, "ssd2", 0, matched_module, matched_group, hardware_graph, "key1", SSDs, disconnected_ssds, failed_node, time_period, max_flow_for_rebuild_table, max_flow_for_network_rebuild_table)
     assert len(repair_events) == 1, "Failed to add repair event for SSD node"
     repair_time, event_type, event_node, event_time = repair_events[0]
     assert event_type == 'repair', "Event type should be 'repair'"

@@ -9,8 +9,6 @@ class InteractiveGraph:
         self.G = hardware_graph.G
         self.edges = hardware_graph.edges
         self.enclosures = hardware_graph.enclosures
-        self.redundancies = hardware_graph.redundancies
-        self.redundancy_groups = hardware_graph.redundancy_groups
         self.pos = graphviz_layout(self.G, prog='dot', args='-Goverlap=scale -Gnodesep=22 -Gpad=5')
         self.selected_node = None
         self.selected_node = None
@@ -56,9 +54,6 @@ class InteractiveGraph:
         # Draw NVMeEnclosure boxes
         self.draw_enclosures()
 
-        # Draw redundancy groups
-        self.draw_redundancy_groups()
-
         self.fig.canvas.draw()
 
     def draw_enclosures(self):
@@ -75,22 +70,6 @@ class InteractiveGraph:
                 self.ax.add_patch(Rectangle((x_min-padding, y_min-padding), x_max-x_min+2*padding, y_max-y_min+2*padding, fill=True, color=colors[idx % len(colors)], alpha=0.3))
                 self.ax.text((x_min + x_max) / 2, y_min - padding, enclosure, horizontalalignment='center', verticalalignment='top', fontsize=9, color='black', bbox=dict(facecolor='white', alpha=0.6))
 
-    def draw_redundancy_groups(self):
-        for group_name, (nodes, M) in self.redundancy_groups.items():
-            print (group_name, (nodes, M))
-            x_coords = [self.pos[node][0] for node in nodes if node in self.pos]
-            y_coords = [self.pos[node][1] for node in nodes if node in self.pos]
-            if x_coords and y_coords:
-                x_min, x_max = min(x_coords), max(x_coords)
-                y_min, y_max = min(y_coords), max(y_coords)
-                if x_coords and y_coords:
-                    x_min, x_max = min(x_coords), max(x_coords)
-                    y_min, y_max = min(y_coords), max(y_coords)
-                    center_x = (x_min + x_max) / 2
-                    center_y = (y_min + y_max) / 2
-                    width = (x_max - x_min) + 30   # Add padding
-                    height = (y_max - y_min) + 30  # Add padding
-                    self.ax.add_patch(Ellipse((center_x, center_y), width, height, edgecolor='blue', facecolor='none', linestyle='dashed'))
     def update_annotation(self, edge):
         self.annotation.xy = ((self.pos[edge[0]][0] + self.pos[edge[1]][0]) / 2, (self.pos[edge[0]][1] + self.pos[edge[1]][1]) / 2)
         self.annotation.set_text(f"{edge[0]} -> {edge[1]}: {self.G.edges[edge]['capacity']}")
@@ -129,7 +108,7 @@ class InteractiveGraph:
 
 if __name__ == "__main__":
     file_path = 'graph.json'
-    edges, enclosures, redundancies, mttfs, mtrs, _ = GraphStructure.parse_input_from_json(file_path)
-    hardware_graph = GraphStructure(edges, enclosures, redundancies, mttfs, mtrs)
+    edges, enclosures, mttfs, mtrs, _ = GraphStructure.parse_input_from_json(file_path)
+    hardware_graph = GraphStructure(edges, enclosures, mttfs, mtrs)
     interactive_graph = InteractiveGraph(hardware_graph)
     plt.show()

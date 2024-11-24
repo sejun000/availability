@@ -7,16 +7,14 @@ import json
 max_edge_value = 1_000_000_000_000_000 * 1.0
 
 class GraphStructure:
-    def __init__(self, edges = None, enclosures = None, redundancies = None, mttfs = None, mtrs = None):
+    def __init__(self, edges = None, enclosures = None, mttfs = None, mtrs = None):
         if edges is None:
             self.__init_test()
             return
         self.G = nx.DiGraph()
         self.edges = edges
         self.enclosures = enclosures
-        self.redundancies = redundancies
         self._add_edges()
-        self.redundancy_groups = self._create_redundancy_groups()
         self.mttfs = mttfs
         self.mtrs = mtrs
     
@@ -26,7 +24,6 @@ class GraphStructure:
         self.enclosures = {}
         self.availabilities = {}
         self.redundancies = {}
-        self.redundancy_groups = {}
         self.mttfs = {}
         self.mtrs = {}
 
@@ -110,96 +107,3 @@ class GraphStructure:
             self.G.remove_node('virtual_source')
         if (self.G.has_node('virtual_sink')):
             self.G.remove_node('virtual_sink')
-    def _create_redundancy_groups(self):
-        groups = {}
-        for module, (M, K) in self.redundancies.items():
-            nodes = [node for node in self.G.nodes() if node.startswith(module)]
-            group_size = M + K
-            for i in range(0, len(nodes), group_size):
-                group = (nodes[i:i + group_size], M)
-                group_name = f"{module}_group_{i // group_size}"
-                groups[group_name] = group
-            if (len(nodes) == 0): # if there are no nodes in the module, check enclosures
-                group_size = M + K
-                nodes = [enclosure for enclosure in self.enclosures if module in enclosure]
-                #print (nodes)
-                for i in range(0, len(nodes), group_size):
-                    group = (nodes[i:i + group_size], M)
-                    group_name = f"{module}_group_{i // group_size}"
-                    groups[group_name] = group
-        #print (groups)
-        return groups
-    @staticmethod
-
-    def parse_input_from_json(file_path):
-        """
-        JSON 파일로부터 데이터를 파싱하여 edges, enclosures, availabilities, redundancies, mttfs, mtrs를 반환합니다.
-        
-        Parameters:
-            file_path (str): JSON 파일의 경로.
-            
-        Returns:
-            tuple: (edges, enclosures, availabilities, redundancies, mttfs, mtrs)
-        """
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Edges: List of tuples (start, end, weight)
-        edges = []
-        for edge in data.get("edges", []):
-            start = edge.get("start")
-            end = edge.get("end")
-            weight = edge.get("bandwidth")
-            if start is not None and end is not None and weight is not None:
-                edges.append((start, end, weight))
-        
-        # Enclosures: Dict of enclosure name to list of nodes
-        enclosures = data.get("enclosures", {})
-                
-        # MTTFs: Dict of module to MTTF
-        mttfs = data.get("mttf", {})
-        
-        # MTRs: Dict of module to MTR
-        mtrs = data.get("mtr", {})
-        
-        # Redundancies: Dict of module to tuple (M, K)
-        redundancies = {}
-        for module, redundancy in data.get("redundancies", {}).items():
-            M = redundancy.get("M")
-            K = redundancy.get("K")
-            if M is not None and K is not None:
-                redundancies[module] = (M, K)
-        
-        options = data.get("options", {})
-        return edges, enclosures, redundancies, mttfs, mtrs, options
-
-    @staticmethod
-    def parse_input_from_excel(file_path, sheet_name, start_cell, enclosure_start_cell, availability_sheet):
-        df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
-        start_row = start_cell[1] - 1
-        start_col = ord(start_cell[0].upper()) - ord('A')
-        enclosure_start_row = enclosure_start_cell[1] - 1
-        enclosure_start_col = ord(enclosure_start_cell[0].upper()) - ord('A')
-
-        edges = []
-        for i in range(start_row, len(df)):
-            if pd.isna(df.iloc[i, start_col]):
-                break
-            start = df.iloc[i, start_col]
-            end = df.iloc[i, start_col + 1]
-            weight = df.iloc[i, start_col + 2]
-            edges.append((start, end, weight))
-        
-        enclosures = {}
-        for i in range(enclosure_start_row, len(df)):
-            if pd.isna(df.iloc[i, enclosure_start_col]):
-                break
-            enclosure = df.iloc[i, enclosure_start_col]
-            nodes = [str(df.iloc[i, enclosure_start_col + j]) for j in range(1, len(df.columns) - enclosure_start_col) if not pd.isna(df.iloc[i, enclosure_start_col + j])]
-            enclosures[enclosure] = nodes
-
-        avail_df = pd.read_excel(file_path, sheet_name=availability_sheet, header=1, usecols="B,C,D,E,F,G")
-        mttfs = {str(row['module']): row['MTTF'] for _, row in avail_df.iterrows()}
-        mtrs = {str(row['module']): row['MTR'] for _, row in avail_df.iterrows()}
-        redundancies = {str(row['module']): (row['M'], row['K']) for _, row in avail_df.iterrows()}
-        return edges, enclosures, redundancies, mttfs, mtrs
