@@ -6,7 +6,7 @@ extern "C" {
     #include <isa-l.h>
 }
 
-#define CHUNK_SIZE (256 * 1024) // 256KB
+#define CHUNK_SIZE (4 * 1024) // 256KB
 #define N_MIN 2
 #define N_MAX 48
 

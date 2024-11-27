@@ -60,7 +60,8 @@ def parse_arguments():
     parser.add_argument('--cached_network_k', type=int, default=0, help='Number of Parity chunks in network cache tier')
     parser.add_argument('--inter_replicas', type=int, default=0, help='Number of network copys')
     parser.add_argument('--intra_replicas', type=int, default=0, help='Number of local copys')
-    parser.add_argument('--cached_write_ratio', type=int, default=0, help='Cached write ratio relative to total write')
+    parser.add_argument('--cached_write_ratio', type=float, default=0, help='Cached write ratio relative to total write')
+    parser.add_argument('--cached_read_ratio', type=float, default=0.5, help='Cached write ratio relative to total write')
     parser.add_argument('--total_network_nodes', type=int, default=6, help='Total number of network nodes')
     parser.add_argument('--network_m', type=int, default=6, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
@@ -87,6 +88,8 @@ cached_m = args.cached_m
 cached_k = args.cached_k
 cached_network_m = args.cached_network_m
 cached_network_k = args.cached_network_k
+if (cached_network_m == 0):
+    cached_network_m = args.network_m
 inter_replicas = args.inter_replicas
 intra_replicas = args.intra_replicas
 
@@ -126,6 +129,8 @@ if ((total_ssds - cached_ssds) % (n) != 0):
     raise ValueError('total_ssds should be divisible by the sum of m, k')
 
 if (cached_ssds > 0):
+    if (cached_write_ratio == 0 or cached_write_ratio >= 1):
+        raise ValueError('cached_write_ratio should be between 0 and 1')
     if (cached_m + cached_k > cached_ssds):
         raise ValueError('The sum of cached_m, cached_k should not exceed cached_ssds')
     if (inter_replicas > 0 and cached_network_m != cached_network_k):
@@ -159,12 +164,17 @@ params_and_results['simulation'] = simulation
 params_and_results['dwpd'] = dwpd
 params_and_results['guaranteed_years'] = guaranteed_years
 params_and_results['dwpd_limit'] = dwpd_limit
+params_and_results['cached_dwpd_limit'] = tlc_dwpd
 params_and_results['use_tbwpd'] = use_tbwpd
 params_and_results['tbwpd'] = tbwpd
 params_and_results['simulation'] = simulation
 params_and_results['total_network_nodes'] = total_network_nodes
 params_and_results['ssd_read_bw'] = read_bw
 params_and_results['ssd_write_bw'] = write_bw
+params_and_results['cached_ssd_read_bw'] = tlc_read_bw
+params_and_results['cached_ssd_write_bw'] = tlc_write_bw
+params_and_results['cached_ssd_read_latency'] = options['tlc_read_latency']
+params_and_results['cached_read_ratio'] = args.cached_read_ratio
 
 df = pd.DataFrame(encoding_time_data)
 

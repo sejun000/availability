@@ -24,3 +24,15 @@ print (data1)
 print (data2)
 print (data1 == data2)
 print (data3 == data4)
+
+data5 = frozenset([
+    frozenset([0, frozenset({'failure_count': 1, 'network_failure_count': 0}.items())]),
+    frozenset([1, frozenset({'failure_count': 2, 'network_failure_count': 1}.items())]),
+    frozenset([0, frozenset({'failure_count': 0, 'network_failure_count': 0}.items())])])
+
+data6 = frozenset([
+    frozenset([0,  frozenset({'failure_count': , 'network_failure_count': 0}.items())]),
+    frozenset([0, frozenset({'failure_count': 0, 'network_failure_count': 0}.items())]),
+    frozenset([1, frozenset({'failure_count': 2, 'network_failure_count': 1}.items())])])
+
+print (data5 == data6)
