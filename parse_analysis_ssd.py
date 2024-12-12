@@ -136,7 +136,7 @@ plt.figure(figsize=(8, 6))
 
 # 분산 그래프 그리기
 
-y_axis = 'lat_avail_nines'
+y_axis = 'availability'
 
 for value in filtered_df['rebuild_type'].unique():
     # 각 dwpd 값에 해당하는 데이터 선택

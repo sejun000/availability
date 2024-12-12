@@ -165,6 +165,11 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
         local_ssd_read_bw = ssd_read_bw * local_read_degradation_ratio
         prefix = ssd_redun_scheme.get_cached_prefix(cached)
         tiered_ssds = ssd_redun_scheme.get_tiered_ssds(cached)
+        ssd_m = ssd_redun_scheme.get_m(cached)
+        ssd_k = ssd_redun_scheme.get_k(cached)
+        normal_latency = ssd_read_latency + network_latency * critical_path_length + tcp_stack_latency
+
+        # catastrophic failure for the simulated nodes
         if judge_state_from_failure_info(failure_info, ssd_redun_scheme, disconnected, cached) == SSD_state_intra_rebuilding:
             local_failure_count = failure_info['failure_count']            
             degraded_bw = calculate_bottleneck_speed(df, ssd_m, local_failure_count, [local_ssd_read_bw], options)
@@ -560,7 +565,9 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, batch_siz
     params_and_results['cached_availability'] = total_cached_up_time / total_time
     cached_ssds = params_and_results['cached_ssds']
     total_ssds = params_and_results['total_ssds']
-    params_and_results['availability'] = params_and_results['uncached_availability'] * (total_ssds - cached_ssds) / total_ssds + params_and_results['cached_availability'] * cached_ssds / total_ssds
+    params_and_results['availability'] = params_and_results['uncached_availability'] * params_and_results['cached_availability']
+    if (params_and_results['write_through']):
+        params_and_results['availability'] = params_and_results['uncached_availability']
     params_and_results['effective_availability'] = total_effective_up_time / total_time
     params_and_results['avg_latency'] = avg_latency
     params_and_results['median'] = median
@@ -612,6 +619,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     network_m = params_and_results['network_m']
     network_k = params_and_results['network_k']
     df = params_and_results['df']
+    write_through = params_and_results['write_through']
     ssd_read_latency, tcp_stack_latency = get_latencies_from_options(options, params_and_results)
     network_latency = utils.convert_to_microseconds(options["network_latency"])
     # In static analysis, standby_ssd is not considered
@@ -622,18 +630,23 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     cached_mttf = guaranteed_years * 365 * 24 * cached_dwpd_limit / dwpd
     if (use_tbwpd):
         cached_mttf = guaranteed_years * 365 * 24 * (cached_dwpd_limit * capacity / 1_000_000_000_000) / tbwpd
-    if (cached_write_ratio > 0):
-        # mttf will be changed according to effective capacity ratio between cached and uncached ssds
+    
+    # for cached ssds
+    if (cached_m > 0):
         effective_capacity_for_cached = cached_m / (cached_m + cached_k)
         effective_capacity_for_uncached = m / (m + k)
-
+        # total tbwpd is calculated by the sum of the tbwpd of cached and uncached ssds for fair comparison
         total_tbwpd = capacity * total_ssds * dwpd / 1_000_000_000_000
-        effective_total_tbwpd = total_tbwpd * (cached_ssds / total_ssds * effective_capacity_for_cached + (total_ssds - cached_ssds) / total_ssds * effective_capacity_for_uncached)
-        cached_tbwpd = effective_total_tbwpd * cached_write_ratio / effective_capacity_for_cached / cached_ssds
-        uncached_tbwpd = effective_total_tbwpd * (1 - cached_write_ratio) / effective_capacity_for_uncached / (total_ssds - cached_ssds)
+        #effective_total_tbwpd = total_tbwpd * (cached_ssds / total_ssds * effective_capacity_for_cached + (total_ssds - cached_ssds) / total_ssds * effective_capacity_for_uncached)
+        if (write_through):
+            cached_tbwpd = total_tbwpd / cached_ssds
+            uncached_tbwpd = total_tbwpd / (total_ssds - cached_ssds)
+        elif (cached_write_ratio > 0):
+            cached_tbwpd = total_tbwpd * cached_write_ratio / cached_ssds
+            uncached_tbwpd = total_tbwpd * (1 - cached_write_ratio) / (total_ssds - cached_ssds)
         cached_mttf = guaranteed_years * 365 * 24 * (cached_dwpd_limit * capacity / 1_000_000_000_000) / cached_tbwpd
-        mttf = guaranteed_years * 365 * 24 * (cached_dwpd_limit * capacity / 1_000_000_000_000) / uncached_tbwpd
-        # print (cached_mttf, mttf, cached_tbwpd, uncached_tbwpd, total_tbwpd)
+        mttf = guaranteed_years * 365 * 24 * (dwpd_limit * capacity / 1_000_000_000_000) / uncached_tbwpd
+            #print (cached_mttf, mttf, cached_tbwpd, uncached_tbwpd, total_tbwpd)
 
     ssd_redun_scheme = ssd.SSDRedundancyScheme(write_bw, read_bw, ssd_read_latency, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_read_latency, cached_mttf, m, k, cached_m, cached_k, network_m, network_k, cached_network_m, cached_network_k, cached_ssds, total_ssds)
     

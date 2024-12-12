@@ -61,7 +61,8 @@ def parse_arguments():
     parser.add_argument('--inter_replicas', type=int, default=0, help='Number of network copys')
     parser.add_argument('--intra_replicas', type=int, default=0, help='Number of local copys')
     parser.add_argument('--cached_write_ratio', type=float, default=0, help='Cached write ratio relative to total write')
-    parser.add_argument('--cached_read_ratio', type=float, default=0.5, help='Cached write ratio relative to total write')
+    parser.add_argument('--cached_read_ratio', type=float, default=0.8, help='Cached read ratio relative to total write')
+    parser.add_argument('--write_through', action='store_true', help='Flag to indicate if write through is used')
     parser.add_argument('--total_network_nodes', type=int, default=6, help='Total number of network nodes')
     parser.add_argument('--network_m', type=int, default=6, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
@@ -128,8 +129,14 @@ if (n > total_ssds):
 if ((total_ssds - cached_ssds) % (n) != 0):
     raise ValueError('total_ssds should be divisible by the sum of m, k')
 
+if (args.write_through):
+    if (cached_ssds == 0):
+        raise ValueError('Write through should be used with cached tier')
+    if (cached_write_ratio != 0):
+        raise ValueError('Do not use cached_write_ratio with write through')
+
 if (cached_ssds > 0):
-    if (cached_write_ratio == 0 or cached_write_ratio >= 1):
+    if ((cached_write_ratio == 0 or cached_write_ratio >= 1) and not args.write_through):
         raise ValueError('cached_write_ratio should be between 0 and 1')
     if (cached_m + cached_k > cached_ssds):
         raise ValueError('The sum of cached_m, cached_k should not exceed cached_ssds')
@@ -175,6 +182,7 @@ params_and_results['cached_ssd_read_bw'] = tlc_read_bw
 params_and_results['cached_ssd_write_bw'] = tlc_write_bw
 params_and_results['cached_ssd_read_latency'] = options['tlc_read_latency']
 params_and_results['cached_read_ratio'] = args.cached_read_ratio
+params_and_results['write_through'] = args.write_through
 
 df = pd.DataFrame(encoding_time_data)
 
