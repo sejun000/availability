@@ -42,11 +42,12 @@ def parse_input_from_json(file_path):
     
     # MTRs: Dict of module to MTR
     mtrs = data.get("mtr", {})
+    costs = data.get("cost", {})
     
     # Redundancies: Dict of module to tuple (M, K)
     
     options = data.get("options", {})
-    return edges, enclosures, mttfs, mtrs, options
+    return edges, enclosures, mttfs, mtrs, costs, options
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='SSD only analysis\' parameters.')
@@ -105,7 +106,7 @@ use_tbwpd = args.use_tbwpd
 simulation = args.simulation
 total_network_nodes = args.total_network_nodes
 
-edges, enclosures, mttfs, mtrs, options = parse_input_from_json(args.graph_structure_file)
+edges, enclosures, mttfs, mtrs, costs, options = parse_input_from_json(args.graph_structure_file)
 hardware_graph = GraphStructure(edges, enclosures, mttfs, mtrs)
 
 qlc_write_bw = KMG_to_bytes(options['qlc_write_bw'])
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     global batch_size
     if (simulation):
         batch_size = 20000
-        sim.monte_carlo_simulation(params_and_results, hardware_graph, batch_size, options)
+        sim.monte_carlo_simulation(params_and_results, hardware_graph, batch_size, options, costs)
         print (edges, enclosures, mttfs, mtrs)
     else:
         test_static_analyze_ssd_only(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, params_and_results, m, k, n, df, write_bw)
