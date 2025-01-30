@@ -44,7 +44,13 @@ class GraphStructure:
             return float(weight[:-1]) * 1_000_000
         else:
             raise ValueError("Unknown weight format")
-
+    def get_module_degraded(self, end_module):
+        cnt = 0
+        for node in self.G.nodes():
+            if end_module in node:
+                cnt += 1
+        if cnt == 1:
+            return True
     def calculate_max_flow(self, start_node_module, leaf_node_module):
         self.add_virtual_nodes(start_node_module, leaf_node_module)
         flow_value, flow_dict = nx.maximum_flow(self.G, 'virtual_source', 'virtual_sink',  flow_func=edmonds_karp)
@@ -56,25 +62,19 @@ class GraphStructure:
         self.G.add_node('virtual_sink')
         for node in self.G.nodes():
             if start_node_module in node:
-                #print (start_node_module, node)
                 self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
             if leaf_node_module in node:
-                #if ("backend_module" in leaf_node_module):
-                #    print (node)
-                #print (leaf_node_module, node)
                 self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
     def add_virtual_nodes_for_n_leaf_nodes(self, start_node_module, leaf_node_module, n):
         self.G.add_node('virtual_source')
         self.G.add_node('virtual_sink')
         for node in self.G.nodes():
             if start_node_module in node:
-                #print (start_node_module, node)
                 self.G.add_edge('virtual_source', node, capacity=float(max_edge_value))
             if leaf_node_module in node:
                 node_index = int(node.split('_')[-1])
                 if node_index > 0 and node_index < n:
                     self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
-                #print (leaf_node_module, node)
                 self.G.add_edge(node, 'virtual_sink', capacity=float(max_edge_value))
     def add_virtual_source(self, start_node_module):
         self.G.add_node('virtual_source')

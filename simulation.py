@@ -118,23 +118,23 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
     latencies['cached_latencies'] = defaultdict(int)
     latencies['latencies'] = defaultdict(int)
     total_read_bw_for_ssds = 0
+    end_module_degraded = hardware_graph_copy.get_module_degraded(options["end_module"])
 
     for group_index, failure_info in failure_info_per_ssd_group.items():
         cached = ssd_redun_scheme.is_ssd_group_index_cached(group_index)
         ssd_m = ssd_redun_scheme.get_m(cached)
         ssd_k = ssd_redun_scheme.get_k(cached)
+        ssd_l = ssd_redun_scheme.get_l(cached)
         ssd_read_latency = ssd_redun_scheme.get_read_latency(cached)
         ssd_read_bw = ssd_redun_scheme.get_read_bw(cached)
+        if (end_module_degraded):
+            ssd_read_bw = ssd_read_bw / 2
         normal_latency = ssd_read_latency + network_latency * critical_path_length + tcp_stack_latency
         prefix = ssd_redun_scheme.get_cached_prefix(cached)
         degraded_ssd_count = ssd_m - failure_info['failure_count']
         total_read_bw_for_ssds += ssd_read_bw * degraded_ssd_count
         normal_ssds_count += degraded_ssd_count
-        latencies[prefix + 'latencies'][normal_latency] += (ssd_m + ssd_k)
-   #     if (prefix == 'cached_'):
-   #         if not (normal_latency >= 47.9 and normal_latency <= 48.1):
-   #             print (normal_latency)
-   #             assert False
+        latencies[prefix + 'latencies'][normal_latency] += (ssd_m + ssd_k + ssd_l)
     
     # if dram bandwdith is bottleneck, we need to reduce the read bw as dram bandwidth
     local_read_degradation_ratio = dram_bandwidth / total_read_bw_for_ssds
@@ -159,6 +159,9 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
         cached = ssd_redun_scheme.is_ssd_group_index_cached(group_index)
         ssd_read_bw = ssd_redun_scheme.get_read_bw(cached)
         ssd_write_bw = ssd_redun_scheme.get_write_bw(cached)
+        if (end_module_degraded):
+            ssd_read_bw = ssd_read_bw / 2
+            ssd_write_bw = ssd_write_bw / 2
         network_m = ssd_redun_scheme.get_network_m(cached)
         network_k = ssd_redun_scheme.get_network_k(cached)
         ssd_read_latency = ssd_redun_scheme.get_read_latency(cached)
@@ -167,13 +170,19 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
         tiered_ssds = ssd_redun_scheme.get_tiered_ssds(cached)
         ssd_m = ssd_redun_scheme.get_m(cached)
         ssd_k = ssd_redun_scheme.get_k(cached)
+        ssd_l = ssd_redun_scheme.get_l(cached)
         normal_latency = ssd_read_latency + network_latency * critical_path_length + tcp_stack_latency
 
         # catastrophic failure for the simulated nodes
         if judge_state_from_failure_info(failure_info, ssd_redun_scheme, disconnected, cached) == SSD_state_intra_rebuilding:
-            local_failure_count = failure_info['failure_count']            
+            local_failure_count = failure_info['failure_count']
+            degraded_ssds = ssd_m - local_failure_count
+            rebuild_speed_up = 1
+            if (local_failure_count < ssd_k):
+                # rebuilding to reserve space
+                rebuild_speed_up = degraded_ssds
             degraded_bw = calculate_bottleneck_speed(df, ssd_m, local_failure_count, [local_ssd_read_bw], options)
-            rebuilding_bw = calculate_bottleneck_speed(df, ssd_m, local_failure_count, [local_ssd_read_bw, ssd_write_bw], options)
+            rebuilding_bw = calculate_bottleneck_speed(df, ssd_m, local_failure_count, [local_ssd_read_bw, ssd_write_bw * rebuild_speed_up], options)
             tables[prefix + 'intra_rebuilding_bw'][local_failure_count] = rebuilding_bw
             degraded_ssd_count = ssd_m - local_failure_count
             total_read_bw_for_ssds = total_read_bw_for_ssds - degraded_bw * degraded_ssd_count
@@ -198,9 +207,14 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
             tables[prefix + 'backup_rebuild_speed'] = rebuilding_bw
             #print (disconnected, bottleneck_read_bw_per_ssd, rebuilding_bw)
             # all read is removed from data loss failure, but bottleneck read bw is not changed (it is used for other ssds)
+            ssd_n = ssd_m + ssd_k + ssd_l
+
+            # declustered parity will not failed all portion of stripe, so we need to calculate the portion of failed ssds
+            data_loss_portion = 1 - combinations_count(ssd_n - failure_info['failure_count'], ssd_m) / combinations_count(ssd_n, ssd_m)
+
             degraded_ssd_count = ssd_m - failure_info['failure_count']
             total_read_bw_for_ssds = total_read_bw_for_ssds - local_ssd_read_bw * degraded_ssd_count
-            availability_ratio[prefix + 'availability'] -= (ssd_m + ssd_k) / tiered_ssds
+            availability_ratio[prefix + 'availability'] -= (ssd_m + ssd_k) / tiered_ssds * data_loss_portion
             latencies[prefix + 'latencies'][normal_latency] -= (ssd_m + ssd_k)
             data_loss_ssds += ssd_m + ssd_k
 
@@ -305,7 +319,8 @@ def update_ssd_state(ssd_name, failure_info_per_ssd_group, SSDs, capacity, event
     cached = ssd_redun_scheme.is_ssd_index_cached(ssd_index)
     m = ssd_redun_scheme.get_m(cached)
     k = ssd_redun_scheme.get_k(cached)
-    n = m + k
+    l = ssd_redun_scheme.get_l(cached)
+    n = m + k + l
     group_index = ssd_redun_scheme.get_ssd_group_index(ssd_index)
     
     failure_info = failure_info_per_ssd_group[group_index]
@@ -319,6 +334,8 @@ def update_ssd_state(ssd_name, failure_info_per_ssd_group, SSDs, capacity, event
         SSDs[i]['state'] = changed_state    
 
 def combinations_count(n, k):
+    if (n < k):
+        return 0
     return math.factorial(n) // (math.factorial(k) * math.factorial(n - k))
 
 def generate_network_failure_table(network_n, availability_without_network_parity, availability_without_network_parity_for_cached_ssds, network_availability_table):
@@ -504,33 +521,48 @@ def get_latencies_from_options(options, params_and_results):
 def calculate_module_cost(node, node_to_module_map, costs, ssd_redun_scheme, cached_ssd_cost, uncached_ssd_cost):
     if (not ssd.SSD_module_name in node):
         module = node_to_module_map[node]
-        return costs[module]
+        return costs[module] * get_coefficient_for_cost(module)
     else:
         ssd_index = ssd.get_ssd_index(node)
         cached = ssd_redun_scheme.is_ssd_index_cached(ssd_index)
         if (cached):
             return cached_ssd_cost
-        return uncached_ssd_cost
-        
+        return uncached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name)
+
+# We set coefficient for cost manually
+def get_coefficient_for_cost(module):
+    if (module == ssd.SSD_module_name):
+        return 6
+    if (module == 'io_module'):
+        return 6
+    if (module == "host_module"):
+        return 6
+    if (module == "backend_module"):
+        return 6
+    if (module == "NVMeEnclosure"):
+        return 6
+    return 1
+
+
 def get_initial_cost(hardware_graph, node_to_module_map, ssd_total_count, ssd_redun_scheme, cached_ssd_cost, uncached_ssd_cost, costs):
     initial_cost = 0
     for node in list(hardware_graph.G.nodes()):
         module = node_to_module_map[node]
-        initial_cost += costs[module]
+        initial_cost += costs[module] * get_coefficient_for_cost(module)
     # Generate enclosure failure and repair events
     for enclosure in list(hardware_graph.enclosures):
         module = node_to_module_map[enclosure]
-        initial_cost += costs[module]
+        initial_cost += costs[module] * get_coefficient_for_cost(module)
     for ssd_index in range(0, ssd_total_count):
         cached = ssd_redun_scheme.is_ssd_index_cached(ssd_index)
         if (cached):
-            initial_cost += cached_ssd_cost
+            initial_cost += cached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name)
         else:
-            initial_cost += uncached_ssd_cost
+            initial_cost += uncached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name)
     return initial_cost
 
 def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simulations, options, costs):
-    procs = 20 #os.cpu_count()
+    procs = 40 #os.cpu_count()
     
     batch_size = (num_simulations + procs - 1) // procs
     jobs = []
@@ -569,8 +601,10 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
     cached_read_ratio = params_and_results['cached_read_ratio']
     initial_cost_sum = 0
     total_cost_sum = 0
+    total_time_for_rebuilding = 0
+    total_count_for_rebuilding = 0
 
-    for up_time, cached_up_time, simulation_time, effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost in results_from_proc:
+    for up_time, cached_up_time, simulation_time, effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost, time_for_rebuilding, count_for_rebuilding in results_from_proc:
         total_up_time += up_time
         total_cached_up_time += cached_up_time
         total_time += simulation_time
@@ -585,12 +619,15 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
             total_latencies_dict[key] += cached_latencies[key] * cached_read_ratio
         initial_cost_sum += initial_cost
         total_cost_sum += total_cost
+        total_time_for_rebuilding += time_for_rebuilding
+        total_count_for_rebuilding += count_for_rebuilding
 
+    avg_time_for_rebuilding = total_time_for_rebuilding / total_count_for_rebuilding
     avg_initial_cost = initial_cost_sum / procs
     avg_total_cost = total_cost_sum / procs
     total_down_time_cost = (total_time - total_up_time) * options['down_time_cost_per_hour']
-    repair_cost_per_year = (avg_total_cost - avg_initial_cost) / params_and_results['guaranteed_years'] / batch_size
-    down_cost_per_year = total_down_time_cost / params_and_results['guaranteed_years'] / batch_size
+    repair_cost_per_year = (avg_total_cost - avg_initial_cost) / options["simulation_years"] / batch_size
+    down_cost_per_year = total_down_time_cost / options["simulation_years"] / batch_size * params_and_results['capacity'] / 64_000_000_000_000
     operation_cost_per_year = repair_cost_per_year + down_cost_per_year
     #_, _, p99, p99_9, p99_99 = utils.get_percentile_value(effective_availabilities_dict, False)
     avg_latency, median, p99, p99_9, p99_99 = utils.get_percentile_value(latencies_dict, True)
@@ -603,7 +640,7 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
     else:
         cached_avg_latency, cached_median, cached_p99, cached_p99_9, cached_p99_99 = utils.get_percentile_value(cached_latencies_dict, True)
     total_avg_latency, total_median, total_p99, total_p99_9, total_p99_99 = utils.get_percentile_value(total_latencies_dict, True)
-
+    params_and_results['simulation_year'] = options["simulation_years"]
     params_and_results['up_time'] = total_up_time
     params_and_results['cached_up_time'] = total_cached_up_time
     params_and_results['simulation_time'] = total_time
@@ -613,7 +650,9 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
     params_and_results['availability'] = params_and_results['uncached_availability'] * params_and_results['cached_availability']
     if (params_and_results['write_through']):
         params_and_results['availability'] = params_and_results['uncached_availability']
+    params_and_results['avail_nines'] = utils.get_nines(params_and_results['availability'])
     params_and_results['effective_availability'] = total_effective_up_time / total_time
+    params_and_results['eff_avail_nines'] = utils.get_nines(params_and_results['effective_availability'])
     params_and_results['avg_latency'] = avg_latency
     params_and_results['median'] = median
     params_and_results['p99'] = p99
@@ -633,7 +672,10 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
     params_and_results['repair_cost_per_year'] = repair_cost_per_year
     params_and_results['down_cost_per_year'] = down_cost_per_year
     params_and_results['initial_cost'] = avg_initial_cost
+    params_and_results['repair_cost_for_10_years'] = repair_cost_per_year * 10
+    params_and_results['down_cost_for_10_years'] = down_cost_per_year * 10
     params_and_results['total_cost_for_10_years'] = avg_initial_cost + operation_cost_per_year * 10
+    params_and_results['avg_time_for_rebuilding'] = avg_time_for_rebuilding
 
     print (params_and_results)
     if (params_and_results['network_k'] == 0):
@@ -645,11 +687,14 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
 def simulation_per_core(simulation_idx, params_and_results, graph_structure_origin, batch_size, options, costs, queue):
     m = params_and_results['m']
     k = params_and_results['k']
+    l = params_and_results['l']
     total_ssds = params_and_results['total_ssds']
     cached_m = params_and_results['cached_m']
     cached_k = params_and_results['cached_k']
+    cached_l = params_and_results['cached_l']
     cached_network_m = params_and_results['cached_network_m']
     cached_network_k = params_and_results['cached_network_k']
+    cached_network_l = params_and_results['cached_network_l']
     cached_ssds = params_and_results['cached_ssds']
     dwpd = params_and_results['dwpd']
     cached_dwpd_limit = params_and_results['cached_dwpd_limit']
@@ -666,6 +711,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     tbwpd = params_and_results['tbwpd']
     network_m = params_and_results['network_m']
     network_k = params_and_results['network_k']
+    network_l = params_and_results['network_l']
     df = params_and_results['df']
     write_through = params_and_results['write_through']
     cached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity
@@ -697,8 +743,9 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
         cached_mttf = guaranteed_years * 365 * 24 * (cached_dwpd_limit * capacity / 1_000_000_000_000) / cached_tbwpd
         mttf = guaranteed_years * 365 * 24 * (dwpd_limit * capacity / 1_000_000_000_000) / uncached_tbwpd
             #print (cached_mttf, mttf, cached_tbwpd, uncached_tbwpd, total_tbwpd)
+    
 
-    ssd_redun_scheme = ssd.SSDRedundancyScheme(write_bw, read_bw, ssd_read_latency, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_read_latency, cached_mttf, m, k, cached_m, cached_k, network_m, network_k, cached_network_m, cached_network_k, cached_ssds, total_ssds)
+    ssd_redun_scheme = ssd.SSDRedundancyScheme(write_bw, read_bw, ssd_read_latency, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_read_latency, cached_mttf, m, k, l, cached_m, cached_k, cached_l, network_m, network_k, network_l, cached_network_m, cached_network_k, cached_network_l, cached_ssds, total_ssds)
     
     # only 20% of the bandwidth is used for writing
 
@@ -710,12 +757,17 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     effective_availabilities = defaultdict(int)
     latencies = defaultdict(int)
     cached_latencies = defaultdict(int)
+    module_failure_counts = defaultdict(int)
 
     total_up_time = 0
     total_cached_up_time = 0
     total_time = 0
     total_effective_up_time = 0
     completed = 0
+
+    total_time_for_rebuilding_ssd0 = 0
+    count_for_rebuilding_ssd0 = 0
+    last_timestamp_for_rebuilding_ssd0 = 0
     
     # open avail file and read the availability
     availability_without_network_parity = 0
@@ -801,7 +853,6 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
         cached_up_time += time_diff * cached_availability_ratio
         timestamp += time_diff
         effective_availabilities[effective_availability_ratio] += time_diff
-        #print (effective_availabilities)
         for key, each_latency in latency_entries.items():
             if (key == 'latencies'):
                 for latency in each_latency:
@@ -830,8 +881,15 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     
         #if (not leaf_node_module in event_node):
         if event_type == 'fail':
+            if (ssd.SSD_module_name in event_node and ssd.get_ssd_index(event_node) == 0):
+                last_timestamp_for_rebuilding_ssd0 = event_time
+            elif (not ssd.SSD_module_name in event_node):
+                module_failure_counts[node_to_module_map[event_node]] += 1
             push_repair_event(repair_events, event_node, event_time, node_to_module_map, hardware_graph)
         if event_type == 'repair':
+            if (ssd.SSD_module_name in event_node and ssd.get_ssd_index(event_node) == 0):
+                total_time_for_rebuilding_ssd0 += event_time - last_timestamp_for_rebuilding_ssd0
+                count_for_rebuilding_ssd0 += 1
             total_cost += calculate_module_cost(event_node, node_to_module_map, costs, ssd_redun_scheme, cached_ssd_cost, uncached_ssd_cost)
             push_failed_event(failed_events, event_node, event_time, node_to_module_map, hardware_graph, ssd_redun_scheme)
 
@@ -851,7 +909,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     completed += 1
     assert (timestamp >= simulation_hours * batch_size - 1 and timestamp <= simulation_hours * batch_size + 1)
 
-    queue.put((total_up_time, total_cached_up_time, total_time, total_effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost))
+    queue.put((total_up_time, total_cached_up_time, total_time, total_effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost, total_time_for_rebuilding_ssd0, count_for_rebuilding_ssd0))
     
     return ""
     

@@ -3,6 +3,7 @@ from matplotlib.patches import Rectangle, Ellipse
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 from graph_structure import GraphStructure
+import utils
 
 class InteractiveGraph:
     def __init__(self, hardware_graph):
@@ -34,21 +35,29 @@ class InteractiveGraph:
         y_center = (max(y_coords) + min(y_coords)) / 2
 
         for node in pos:
-            pos[node] = (pos[node][0] * 8 - x_center, pos[node][1] * 8 - y_center)
-        
+            pos[node] = (
+                (pos[node][0] - x_center) * 8,
+                (pos[node][1] - y_center) * 8
+            )
+
         self.pos = pos
 
     def draw_graph(self, hardware_graph):
         self.ax.clear()
         edge_colors = ['red' if weight.endswith('G') else 'blue' for _, _, weight in self.edges]
-        edge_weights = [self.G[u][v]['capacity'] / 10**9 for u, v in self.G.edges()]  # Adjust the edge weight for better visualization
+        edge_weights = [self.G[u][v]['capacity'] / 10**9 for u, v in self.G.edges()]  # Adjust edge weight for visualization
 
-        nx.draw(self.G, pos=self.pos, with_labels=True, node_color='skyblue', node_size=100, 
-                edge_color=edge_colors, width=[w / 10 for w in edge_weights], font_size=5, font_weight='bold', 
-                arrows=True, ax=self.ax)
+        nx.draw(
+            self.G, pos=self.pos, with_labels=True, node_color='skyblue', node_size=100, 
+            edge_color=edge_colors, width=[w / 10 for w in edge_weights], font_size=8, font_weight='bold', 
+            arrows=True, ax=self.ax
+        )
 
-        # Draw edge labels (capacities)
-        edge_labels = {(u, v): f"{self.G[u][v]['label']}" for u, v in self.G.edges() if 'label' in self.G[u][v]}
+        # Draw edge labels
+        edge_labels = {
+            (u, v): f"{self.G[u][v]['label']}" 
+            for u, v in self.G.edges() if 'label' in self.G[u][v]
+        }
         nx.draw_networkx_edge_labels(self.G, pos=self.pos, edge_labels=edge_labels, ax=self.ax)
 
         # Draw NVMeEnclosure boxes
@@ -66,12 +75,25 @@ class InteractiveGraph:
                 y_min, y_max = min(y_coords), max(y_coords)
 
                 # Make the box larger to fully contain the nodes
-                padding = 22 # Increased padding for larger box
-                self.ax.add_patch(Rectangle((x_min-padding, y_min-padding), x_max-x_min+2*padding, y_max-y_min+2*padding, fill=True, color=colors[idx % len(colors)], alpha=0.3))
-                self.ax.text((x_min + x_max) / 2, y_min - padding, enclosure, horizontalalignment='center', verticalalignment='top', fontsize=9, color='black', bbox=dict(facecolor='white', alpha=0.6))
+                padding = 22
+                self.ax.add_patch(Rectangle(
+                    (x_min - padding, y_min - padding),
+                    x_max - x_min + 2 * padding, 
+                    y_max - y_min + 2 * padding, 
+                    fill=True, color=colors[idx % len(colors)], alpha=0.3
+                ))
+                self.ax.text(
+                    (x_min + x_max) / 2, y_min - padding, enclosure,
+                    horizontalalignment='center', verticalalignment='top', 
+                    fontsize=9, color='black', 
+                    bbox=dict(facecolor='white', alpha=0.6)
+                )
 
     def update_annotation(self, edge):
-        self.annotation.xy = ((self.pos[edge[0]][0] + self.pos[edge[1]][0]) / 2, (self.pos[edge[0]][1] + self.pos[edge[1]][1]) / 2)
+        self.annotation.xy = (
+            (self.pos[edge[0]][0] + self.pos[edge[1]][0]) / 2, 
+            (self.pos[edge[0]][1] + self.pos[edge[1]][1]) / 2
+        )
         self.annotation.set_text(f"{edge[0]} -> {edge[1]}: {self.G.edges[edge]['capacity']}")
         self.annotation.get_bbox_patch().set(facecolor='yellow', alpha=0.8)
 
@@ -107,8 +129,8 @@ class InteractiveGraph:
         pass
 
 if __name__ == "__main__":
-    file_path = 'graph.json'
-    edges, enclosures, mttfs, mtrs, _ = GraphStructure.parse_input_from_json(file_path)
+    file_path = '3tier.json'
+    edges, enclosures, mttfs, mtrs, _, _ = utils.parse_input_from_json(file_path)
     hardware_graph = GraphStructure(edges, enclosures, mttfs, mtrs)
     interactive_graph = InteractiveGraph(hardware_graph)
     plt.show()

@@ -23,6 +23,9 @@ for t in "${type[@]}"; do
                 for tbw in "${tbwpds[@]}"; do
                     # we set standby ssd to 0
                     m=$(($s - $standby_ssd - $p))
+                    if [ $m -lt 1 ]; then
+                        continue
+                    fi
                     for c in "${capacity[@]}"; do
                         if [ "$use_tbwpd" = true ]; then
                             use_tbwpd_flag="--use_tbwpd"
