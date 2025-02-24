@@ -309,13 +309,15 @@ encoding_time_data = [
     Returns:
     - float: Time in seconds.
 """
-def get_encoding_latency_usec(df, m, k):
+def get_encoding_latency_usec(df, m, k, replication=False):
     if (k == 0):
+        return 0
+    if (replication):
         return 0
     erasure_coding_latency = df[(df['n'] == m) & (df['k'] == k)]['Encoding Time'].values[0]
     return int(erasure_coding_latency)
 
-def get_encoding_latency_sec(df, m, k):
+def get_encoding_latency_sec(df, m, k, replication=False):
     return get_encoding_latency_usec(df, m, k) / 1e6
 
 def latency_changed(dict, old, new, number):

@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import encoding_time_data
 from utils import KMG_to_bytes
 from utils import parse_input_from_json
-from static_analysis import test_static_analyze_ssd_only
+#from static_analysis import test_static_analyze_ssd_only
 from graph_structure import GraphStructure
 import simulation as sim
 
@@ -43,6 +43,7 @@ def parse_arguments():
     parser.add_argument('--guarnanteed_years', type=int, default=5, help='Guaranteed years of SSDs')
     parser.add_argument('--config_file', type=str, default='2tier.json', help='Graph structure file path')
     parser.add_argument('--output_file', type=str, default='results.txt', help='Output file path to save results')
+    parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
     args = parser.parse_args()
     return args
 
@@ -115,16 +116,25 @@ if (cached_ssds == 0 and cached_m + cached_k + cached_l > 0):
     raise ValueError('Do not use cached_m, cached_k, cached_l without cached_ssds')
 
 if (cached_ssds > 0):
+    if (intra_replicas > 1):
+        cached_m = 1
+        cached_k = intra_replicas - 1
+        cached_l = 0
+        print ("input cached_m and cached_k are ignored, and calculated as 1 and intra_replicas - 1")
+    if (inter_replicas > 1):
+        cached_network_m = 1
+        cached_network_k = inter_replicas - 1
+        cached_network_l = 0
+        print ("input cached_network_m and cached_network_k are ignored, and calculated as 1 and inter_replicas - 1")
     if ((cached_write_ratio == 0 or cached_write_ratio >= 1) and not args.write_through):
         raise ValueError('cached_write_ratio should be between 0 and 1')
     if (cached_m + cached_k + cached_l > cached_ssds):
         raise ValueError('The sum of cached_m, cached_k should not exceed cached_ssds')
-    if (inter_replicas > 0 and cached_network_m != cached_network_k):
-        raise ValueError('cached_network_m should be equal to cached_network_k when inter_replicas > 0')
-    if (intra_replicas > 0 and cached_m != cached_k):
-        raise ValueError('cached_m should be equal to cached_k when intra_replicas > 0')
     if (cached_ssds % (cached_m + cached_k) != 0):
         raise ValueError('cached_ssds should be divisible by the sum of cached_m, cached_k')
+    if (intra_replicas == 1 or inter_replicas == 1):
+        raise ValueError('replicas should be more than 1')
+    
 
 network_l = args.network_l
 network_m = args.network_m
@@ -155,16 +165,26 @@ params_and_results['simulation'] = simulation
 params_and_results['dwpd'] = dwpd
 params_and_results['guaranteed_years'] = guaranteed_years
 params_and_results['dwpd_limit'] = dwpd_limit
-params_and_results['cached_dwpd_limit'] = tlc_dwpd
+
 params_and_results['use_tbwpd'] = use_tbwpd
 params_and_results['tbwpd'] = tbwpd
 params_and_results['simulation'] = simulation
 params_and_results['total_network_nodes'] = total_network_nodes
 params_and_results['ssd_read_bw'] = read_bw
 params_and_results['ssd_write_bw'] = write_bw
-params_and_results['cached_ssd_read_bw'] = tlc_read_bw
-params_and_results['cached_ssd_write_bw'] = tlc_write_bw
-params_and_results['cached_ssd_read_latency'] = options['tlc_read_latency']
+if (args.qlc_cache == True):
+    params_and_results['qlc_cache'] = True
+    params_and_results['cached_dwpd_limit'] = qlc_dwpd
+    params_and_results['cached_ssd_read_bw'] = qlc_read_bw
+    params_and_results['cached_ssd_write_bw'] = qlc_write_bw
+    params_and_results['cached_ssd_read_latency'] = options['qlc_read_latency']
+else:
+    params_and_results['qlc_cache'] = False
+    params_and_results['cached_dwpd_limit'] = tlc_dwpd
+    params_and_results['cached_ssd_read_bw'] = tlc_read_bw
+    params_and_results['cached_ssd_write_bw'] = tlc_write_bw
+    params_and_results['cached_ssd_read_latency'] = options['tlc_read_latency']
+
 params_and_results['cached_read_ratio'] = cached_read_ratio
 params_and_results['write_through'] = args.write_through
 params_and_results['config_file'] = args.config_file
@@ -187,6 +207,6 @@ if __name__ == "__main__":
         num_simulations = 100000
         sim.monte_carlo_simulation(params_and_results, hardware_graph, num_simulations, options, costs)
         print (edges, enclosures, mttfs, mtrs)
-    else:
-        test_static_analyze_ssd_only(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, params_and_results, m, k, n, df, write_bw)
+    
+        #test_static_analyze_ssd_only(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, params_and_results, m, k, n, df, write_bw)
     output_params_and_results()

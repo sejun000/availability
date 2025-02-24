@@ -6,7 +6,7 @@ current_allocated_ssd_group_index = 0
 current_allocated_ssd_index = 0
 
 class SSDRedundancyScheme:
-    def __init__(self, write_bw, read_bw, read_latency, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_read_latency, cached_mttf, m, k, l, cached_m, cached_k, cached_l, network_m, network_k, network_l, cached_network_m, cached_network_k, cached_network_l, cached_ssds, total_ssds):
+    def __init__(self, write_bw, read_bw, read_latency, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_read_latency, cached_mttf, m, k, l, cached_m, cached_k, cached_l, network_m, network_k, network_l, cached_network_m, cached_network_k, cached_network_l, cached_ssds, total_ssds, inter_replicas, intra_replicas):
         self.write_bw = write_bw
         self.read_bw = read_bw
         self.read_latency = read_latency
@@ -32,6 +32,8 @@ class SSDRedundancyScheme:
         self.total_ssds = total_ssds 
         self.ssd_group_size = m + k + l
         self.cached_ssd_group_size = cached_m + cached_k + cached_l   
+        self.inter_replicas = inter_replicas
+        self.intra_replicas = intra_replicas
 
     def is_ssd_index_cached(self, ssd_index):
         return ssd_index >= self.total_ssds - self.cached_ssds
@@ -83,6 +85,10 @@ class SSDRedundancyScheme:
         return self.cached_ssds if cached else self.total_ssds - self.cached_ssds
     def get_cached_prefix(self, cached):
         return "cached_" if cached else ""
+    def get_inter_replicas(self, cached):
+        return self.inter_replicas if cached else 0
+    def get_intra_replicas(self, cached):
+        return self.intra_replicas if cached else 0
 
 def get_ssd_group_index_from_group_name(ssd_group_name):
     return int(ssd_group_name[len(SSD_module_name) + 6:])

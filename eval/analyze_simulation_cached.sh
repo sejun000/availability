@@ -13,7 +13,7 @@ network_datas=(4 8 12)
 network_parities=(0 2 3)
 tier_files=("2tier.json" "3tier.json")
 
-dwpds=(0.1 1)
+dwpds=(0.1 1 3)
 tbwpds=(4.5)
 write_ratio=0.8
 capacity=(64_000_000_000_000)
