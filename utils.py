@@ -321,8 +321,11 @@ def get_encoding_latency_sec(df, m, k, replication=False):
     return get_encoding_latency_usec(df, m, k) / 1e6
 
 def latency_changed(dict, old, new, number):
+    if (old == new):
+        return 0
     dict[old] -= number
     dict[new] += number
+    return number
 
 def KMG_to_bytes(s):
     if s[-1] == 'K':
@@ -365,6 +368,9 @@ def get_nines(availability):
     if (availability == 1.0):
         return 13 # return max value
     return -math.log10(1 - availability)
+
+def get_waf_from_op(op):
+    return 1 / 2 * (1 + op) / float(op)
 
 def get_percentile_value(raw_datas, ascending=True):
     df = pd.DataFrame(list(raw_datas.items()), columns=["value", "interval"])

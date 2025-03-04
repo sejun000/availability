@@ -23,7 +23,8 @@
         "nic_to_ssd_direct": true,
         "tlc_cost_per_gb": 0.2,
         "qlc_cost_per_gb": 0.1,
-        "down_time_cost_per_hour": 18000
+        "down_time_cost_per_hour": 18000,
+        "network_nodes" : 6
     },
     "edges": [
         {"start": "switch0", "end": "io_module0", "bandwidth": "12.5G"},
