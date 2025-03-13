@@ -7,15 +7,15 @@
 #include "icache.h"
 
 // LRU 캐시 클래스 선언
-class LRUCache : public ICache {
+class FIFOCache : public ICache {
 public:
     // 생성자: capacity는 블록 단위 최대 개수
-    LRUCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file);
-    ~LRUCache();
+    FIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file);
+    ~FIFOCache();
 
-    void evict_one_block();
     bool exists(long key);
     void touch(long key, OP_TYPE op_type);
+    void evict_one_block();
     void batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE op_type);
     bool is_cache_filled();
     int get_block_size();

@@ -108,13 +108,14 @@ filtered_df['network_n'] = filtered_df['network_m'] + filtered_df['network_k']
 
 #y_axis_value = 'avail_nines'
 #y_axis_value = 'avail_nines'
-#y_axis_value = 'eff_avail_nines'
+y_axis_value = 'eff_avail_nines'
 #y_axis_value = 'total_cost_for_10_years'
 #y_axis_value = 'down_cost_for_10_years'
 #y_axis_value = 'repair_cost_for_10_years'
+#y_axis_value = 'cost_per_gb'
 #y_axis_value = 'initial_cost'
 # y_axis_value = 'operation_cost_for_10_years'
-y_axis_value = 'avg_time_for_rebuilding'
+#y_axis_value = 'avg_time_for_rebuilding'
 
 print ("intra_only")
 
@@ -125,7 +126,7 @@ output_df = intra_df[['x', y_axis_value, 'm', 'k', 'network_m', 'network_k']]
 
 print("x       ", y_axis_value)
 for _, row in output_df.iterrows():
-    print(f"{row['x']:.3f}     {row[y_axis_value]:.2f}   {row['m']}   {row['k']}  {row['network_m']}   {row['network_k']}")
+    print(f"{row['x']:.3f}     {row[y_axis_value]:.5f}   {row['m']}   {row['k']}  {row['network_m']}   {row['network_k']}")
 
 
 print ("inter_only")
@@ -136,7 +137,7 @@ inter_df = filtered_df[
 output_df = inter_df[['x', y_axis_value, 'm', 'k', 'network_m', 'network_k']]
 print("x       ", y_axis_value)
 for _, row in output_df.iterrows():
-    print(f"{row['x']:.3f}     {row[y_axis_value]:.2f}   {row['m']}   {row['k']}  {row['network_m']}   {row['network_k']}")
+    print(f"{row['x']:.3f}     {row[y_axis_value]:.5f}   {row['m']}   {row['k']}  {row['network_m']}   {row['network_k']}")
 
 print ("both")
 both_df = filtered_df[
@@ -146,4 +147,4 @@ both_df = filtered_df[
 output_df = both_df[['x', y_axis_value, 'm', 'k', 'network_m', 'network_k']]
 print("x       ", y_axis_value)
 for _, row in output_df.iterrows():
-    print(f"{row['x']:.3f}     {row[y_axis_value]:.2f}   {row['m']}   {row['k']}  {row['network_m']}   {row['network_k']}")
+    print(f"{row['x']:.3f}     {row[y_axis_value]:.5f}   {row['m']}   {row['k']}  {row['network_m']}   {row['network_k']}")

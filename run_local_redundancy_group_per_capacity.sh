@@ -1,9 +1,9 @@
 output_file="analysis_capacity_$(date '+%Y%m%d_%H%M%S').txt"
 #data=(8 16 32) # m+k
 #parities=(1 2 3 4) # --k
-#data=(32) # m+k
-#parities=(1 2 3 4) # --k
-capacity=(8_000_000_000_000 16_000_000_000_000 32_000_000_000_000 64_000_000_000_000)
+data=(48) # m+k
+parities=(1 2 3 4) # --k
+capacity=(8_000_000_000_000 16_000_000_000_000 32_000_000_000_000 64_000_000_000_000 128_000_000_000_000)
 dwpd=0.1
 total_ssds=48
 tier_files=("2tier.json")

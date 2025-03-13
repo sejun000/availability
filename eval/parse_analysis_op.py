@@ -73,9 +73,9 @@ input_file = args.input_file
 df = parse_file(input_file)
 
 filtered_df = df[
-    #(df['config_file'] == '2tier.json') &
+    #(df['config_file'] == '3tier.json') &
     (df['m'] > 30) &
-    (df['k'] == 3)
+    (df['k'] == 3) 
     #(df['dwpd'] == 0.1)
 ]
 
@@ -110,28 +110,30 @@ color_vector = [
 
 # 'm + k'를 그룹화 기준으로 추가 열 생성
 filtered_df['n'] = filtered_df['m'] + filtered_df['k']
-filtered_df['col'] = filtered_df['cached_ssds']
+filtered_df['col'] = filtered_df['op_ratio']
+#filtered_df['col'] = filtered_df['cached_ssds'].astype(str) #+'_dwpd_'+ filtered_df['n'].astype(str)
 
 # 데이터프레임을 피벗 형태로 변환
-table = filtered_df.pivot(index='dwpd', columns='col', values='avail_nines')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='credit_avail_nines')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='avg_time_for_rebuilding')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='eff_avail_nines')
+#table = filtered_df.pivot(index='k', columns='col', values='avail_nines')
+#table = filtered_df.pivot(index='k', columns='col', values='credit_avail_nines')
+#table = filtered_df.pivot(index='k', columns='n', values='avg_time_for_rebuilding')
+#table = filtered_df.pivot(index='k', columns='n', values='eff_avail_nines')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='total_cost_for_10_years')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='total_credit_ratio')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='total_credit_ratio')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='cost_per_gb')
+#table = filtered_df.pivot(index='dwpd', columns='col', values='cached_ssd_repair_cost_for_10_years')
+table = filtered_df.pivot(index='dwpd', columns='col', values='uncached_ssd_repair_cost_for_10_years')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='down_cost_for_10_years')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='uncached_ssd_repair_cost_for_10_years')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='repair_cost_for_10_years')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='initial_cost')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='operation_cost_for_10_years')
+#table = filtered_df.pivot(index='k', columns='col', values='repair_cost_for_10_years')
+#table = filtered_df.pivot(index='k', columns='col', values='initial_cost')
+#table = filtered_df.pivot(index='k', columns='n', values='operation_cost_for_10_years')
 
 # 열 이름을 'cached_ssds_n' 형식에서 (cached_ssds, n) 튜플로 변환하여 오름차순 정렬
-#table = table.reindex(sorted(table.columns, key=lambda x: (int(x.split('_dwpd_')[0]), float(x.split('_dwpd_')[1]))), axis=1)
+table = table.reindex(sorted(table.columns, reverse=True), axis=1)
+#table = table.reindex(sorted(table.columns, key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]))), axis=1)
 
 
 # 표 출력
 print("k/n", " ".join(map(str, table.columns)))
-for k, row in table.iterrows():
-    print(k, " ".join(f"{value:.9f}" if not pd.isna(value) else "" for value in row))
+for col, row in table.iterrows():
+    print(col, " ".join(f"{value/1000:.9f}" if not pd.isna(value) else "" for value in row))
+

@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     }
     long long line_count = 0;
     long long total_write_bytes = 0;
-    const long long line_count_limit = 4000000000;
+    const long long line_count_limit = 2750000000;
     
     void *buf;
     if (posix_memalign(&buf, BLOCK_SIZE, 1024ULL * 1024ULL * 256) != 0) {

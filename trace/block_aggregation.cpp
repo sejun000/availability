@@ -1,115 +1,159 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <vector>
 #include <string>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
 #include <cstdlib>
+#include <map>
 
-// main 함수
-int main(int argc, char* argv[]) {
-    if(argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " capacity.csv trace.csv" << std::endl;
-        return 1;
+/**
+ * 간단한 split 함수: 주어진 문자열(line)을 delimiter로 잘라서 vector<string>으로 반환
+ */
+std::vector<std::string> split(const std::string &line, char delimiter) {
+    std::vector<std::string> result;
+    std::stringstream ss(line);
+    std::string token;
+    while (std::getline(ss, token, delimiter)) {
+        if (!token.empty()) {
+            result.push_back(token);
+        }
+    }
+    return result;
+}
+
+/**
+ * device_info.csv에서 device_id -> capacity를 읽어온다.
+ *  예) "0,536870912000"
+ */
+std::unordered_map<int, long long> loadDeviceInfo(const std::string &filename) {
+    std::unordered_map<int, long long> capacities;
+    std::ifstream ifs(filename);
+    if (!ifs.is_open()) {
+        std::cerr << "Error: cannot open device info file: " << filename << std::endl;
+        std::exit(1);
     }
 
-    std::string capacityFile = argv[1];
-    std::string traceFile = argv[2];
-
-    // 1. capacity.csv 파일 읽기
-    std::ifstream capFile(capacityFile);
-    if(!capFile) {
-        std::cerr << "Error opening capacity file: " << capacityFile << std::endl;
-        return 1;
-    }
-
-    // 각 device의 capacity를 순서대로 저장 (byte 단위)
-    std::vector<long long> capacities;
     std::string line;
-    while(std::getline(capFile, line)) {
-        if(line.empty()) continue;
-        std::istringstream iss(line);
-        std::string devIdStr, capStr;
-        if(!std::getline(iss, devIdStr, ',')) continue;
-        if(!std::getline(iss, capStr, ',')) continue;
-        try {
-            long long cap = std::stoll(capStr);
-            capacities.push_back(cap);
-        } catch (...) {
-            std::cerr << "Error parsing capacity in line: " << line << std::endl;
+    while (std::getline(ifs, line)) {
+        // 공백, 주석 등 무시
+        if (line.empty() || line[0] == '#') {
             continue;
         }
+        auto tokens = split(line, ',');
+        if (tokens.size() < 2) {
+            continue; // 잘못된 형식 무시
+        }
+        int devId = std::stoi(tokens[0]);
+        long long capacity = std::stoll(tokens[1]);
+        capacities[devId] = capacity;
     }
-    capFile.close();
+    ifs.close();
+    return capacities;
+}
 
-    // 2. prefix sum 계산
-    // prefix[i]는 device 0부터 device (i-1)까지의 용량 합계를 의미합니다.
-    std::vector<long long> prefix;
-    prefix.push_back(0);
-    for (size_t i = 0; i < capacities.size(); i++) {
-        prefix.push_back(prefix.back() + capacities[i]);
-    }
-    // 예: device_id 0의 누적 용량은 prefix[0] (0),
-    //     device_id 1의 누적 용량은 prefix[1] = capacity[0],
-    //     device_id 2의 누적 용량은 prefix[2] = capacity[0] + capacity[1], 등
-
-    // 3. trace.csv 파일 읽기 및 재계산된 offset 출력
-    std::ifstream inTrace(traceFile);
-    if(!inTrace) {
-        std::cerr << "Error opening trace file: " << traceFile << std::endl;
+int main(int argc, char* argv[])
+{
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0]
+                  << " <device_info.csv> <trace_file.csv> <device_list>\n"
+                  << "  ex) " << argv[0] << " device_info.csv trace_file.csv \"0,3,5,6,9\"\n";
         return 1;
     }
 
-    // 타임스탬프 범위: 10일 (10 days in microseconds)
-    //const long long TEN_DAYS_US = 864000000000LL;
-    // 타임스탬프 범위: 1일 (1 days in microseconds)
-    const long long TEN_DAYS_US = 86400000000LL;
-    bool firstLine = true;
-    long long baseTimestamp = 0; // 첫 행의 timestamp
+    std::string deviceInfoFile = argv[1];
+    std::string traceFile = argv[2];
+    std::string deviceListStr = argv[3];  // 예: "0,3,5,6,9"
 
-    // 각 행을 읽어서 device_id에 해당하는 누적 용량 + 기존 offset을 계산하고,
-    // timestamp가 첫 행 timestamp 기준 10일 이내인 경우에만 처리
-    while(std::getline(inTrace, line)) {
-        if(line.empty()) continue;
-        std::istringstream iss(line);
-        std::string deviceIdStr, opType, offsetStr, sizeStr, timestampStr;
-        if(!std::getline(iss, deviceIdStr, ',')) continue;
-        if(!std::getline(iss, opType, ',')) continue;
-        if(!std::getline(iss, offsetStr, ',')) continue;
-        if(!std::getline(iss, sizeStr, ',')) continue;
-        if(!std::getline(iss, timestampStr)) continue; // 나머지를 timestamp로 사용
-        // this version skip the device id >= 100
-        if (atoi(deviceIdStr.c_str()) >= 100) {
+    // 1) device_info.csv에서 (devID -> capacity) 맵 읽기
+    auto capacities = loadDeviceInfo(deviceInfoFile);
+    // 2) 사용자가 지정한 device ID 리스트 파싱
+    //    예: "0,3,5,6,9" -> [0,3,5,6,9]
+    std::vector<int> chosenDevs;
+    {
+        auto devTokens = split(deviceListStr, ',');
+        for (auto &dstr : devTokens) {
+            chosenDevs.push_back(std::stoi(dstr));
+        }
+    }
+
+    // 3) 지정된 순서대로 prefix sum 계산 (device별 시작 LBA)
+    //    예) prefixMap[0] = 0
+    //         prefixMap[3] = capacity(0)
+    //         prefixMap[5] = capacity(0)+capacity(3)
+    //         ...
+    long long prefix = 0;
+    std::unordered_map<int, long long> prefixMap;
+    for (auto dev : chosenDevs) {
+        if (capacities.find(dev) == capacities.end()) {
+            std::cerr << "Warning: device " << dev
+                      << " not found in device_info.csv. Capacity=0 assumed.\n";
+            prefixMap[dev] = prefix; // 또는 스킵
+        } else {
+            prefixMap[dev] = prefix;
+            prefix += capacities[dev];
+        }
+    }
+    printf ("Selected Capcity : %lld\n", prefix);
+    //return 0;
+    // 4) trace_file.csv 를 열고, 해당 device들에 대한 레코드만 골라서
+    //    오프셋을 prefixMap[devID]만큼 shift하여 출력
+    std::ifstream ifs(traceFile);
+    if (!ifs.is_open()) {
+        std::cerr << "Error: cannot open trace file: " << traceFile << std::endl;
+        return 1;
+    }
+
+    // 결과를 표준출력으로 보낸다.
+    // 포맷: "0,R,NewOffset,Size,Timestamp"
+    // 여기서 device ID는 "0" (또는 원하는 ID)로 통일
+    const std::string unifiedDevId = "0"; // 마치 하나의 디바이스처럼 보이게
+
+    std::string line;
+    long long baseTimestamp = 0; // 첫 행의 timestamp
+    bool firstLine = true;
+    while (std::getline(ifs, line)) {
+        if (line.empty() || line[0] == '#') {
             continue;
         }
-        // timestamp는 마이크로초 단위 (문자열 -> double 후 long long 변환)
-        double tsDouble = std::stod(timestampStr);
-        long long currentTimestamp = static_cast<long long>(tsDouble);
+        auto tokens = split(line, ',');
+        if (tokens.size() < 5) {
+            // 잘못된 형식 -> 스킵
+            continue;
+        }
+
+        int devId = std::stoi(tokens[0]);
+        std::string rw = tokens[1];      // R or W
+        long long offset = std::stoll(tokens[2]);
+        long long size   = std::stoll(tokens[3]);
+        long long ts     = std::stoll(tokens[4]);
         if(firstLine) {
-            baseTimestamp = currentTimestamp;
+            baseTimestamp = ts;
             firstLine = false;
         }
         // 첫 행의 timestamp로부터 10일을 초과하면 중단 (정렬되어 있다고 가정)
-        if (currentTimestamp - baseTimestamp > TEN_DAYS_US) {
+        if (ts - baseTimestamp > 86400 * 1000ULL * 1000ULL) {
             break;
         }
-        
-        int deviceId = std::stoi(deviceIdStr);
-        long long offset = std::stoll(offsetStr);
-
-        // deviceId가 capacities 범위 내에 있는지 확인
-        if(deviceId < 0 || deviceId >= static_cast<int>(capacities.size())) {
-            std::cerr << "Invalid device id: " << deviceId << std::endl;
+        // 해당 devId가 사용자 지정 리스트에 있는지 확인
+        if (prefixMap.find(devId) == prefixMap.end()) {
+            // 포함되지 않은 device -> 스킵
             continue;
         }
 
-        // 재계산: aggregated_offset = (앞의 모든 device 용량 합계) + (현재 offset)
-        long long aggregatedOffset = prefix[deviceId] + offset;
+        // offset을 prefixMap[devId]만큼 shift
+        long long newOffset = offset + prefixMap[devId];
 
-        // 출력: device_id, op_type, aggregated_offset, size, timestamp
-        std::cout << deviceIdStr << "," << opType << "," 
-                  << aggregatedOffset << "," << sizeStr << "," << timestampStr << "\n";
+        // 새 로우 출력 (device ID 통합 = 0)
+        // 형식: "0,R,newOffset,size,timestamp"
+        std::cout << unifiedDevId << ","
+                  << rw << ","
+                  << newOffset << ","
+                  << size << ","
+                  << ts << "\n";
     }
-    inTrace.close();
 
+    ifs.close();
     return 0;
 }

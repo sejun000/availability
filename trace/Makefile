@@ -4,7 +4,7 @@ CXX      = g++
 CXXFLAGS = -Wall -O2 -std=c++11
 
 TARGET   = cache_sim
-SOURCES  = cache_sim.cpp trace_parser.cpp allocator.cpp icache.cpp lru_cache.cpp
+SOURCES  = cache_sim.cpp trace_parser.cpp allocator.cpp icache.cpp lru_cache.cpp fifo_cache.cpp log_fifo_cache.cpp
 OBJECTS  = $(SOURCES:.cpp=.o)
 
 TARGET2 = trace_replayer

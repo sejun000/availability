@@ -1,11 +1,12 @@
 output_file="analysis_local_redundancy_group_$(date '+%Y%m%d_%H%M%S').txt"
-data=(8 12 24 48) # m+k
+#data=(8 16 24 48) # m+k
+data=(48) # m+k
 parities=(1 2 3 4) # --k
 capacity=128_000_000_000_000
-dwpd=1
+dwpd=0.1
 total_ssds=48
-tier_files=("2tier.json")
-#tier_files=("2tier.json" "3tier.json")
+#tier_files=("2tier.json")
+tier_files=("2tier.json" "3tier.json")
 for t in "${tier_files[@]}"; do
     for s in "${data[@]}"; do
         for p in "${parities[@]}"; do

@@ -1,11 +1,11 @@
 output_file="analysis_both_redundancy_group_$(date '+%Y%m%d_%H%M%S').txt"
-data=(8 16 32) # m+k
-parities=(1 2) # --k
-network_data=(8 16 32) # m+k
+data=(8 16 24 48) # m+k
+parities=(1 2 3) # --k
+network_data=(8 16 24 48) # m+k
 network_parity=(0 1 2) # m+k
-capacity=64_000_000_000_000
+capacity=128_000_000_000_000
 dwpd=0.1
-total_ssds=32
+total_ssds=48
 tier_files=("2tier.json")
 for t in "${tier_files[@]}"; do
     for s in "${data[@]}"; do

@@ -71,7 +71,7 @@ input_file = args.input_file
 df = parse_file(input_file)
 df['n'] = df['m'] + df['k']
 filtered_df = df[
-    (df['n'] == 32)
+    (df['n'] == 48)
 ]
 
 filtered_df['x'] = filtered_df['m'] / (filtered_df['m'] + filtered_df['k']) * filtered_df['network_m'] / (filtered_df['network_m'] + filtered_df['network_k']) 
@@ -105,8 +105,11 @@ filtered_df['network_n'] = filtered_df['network_m'] + filtered_df['network_k']
 
 #table = filtered_df.pivot(index='k', columns='config_file', values='avail_nines')
 #table = filtered_df.pivot(index='k', columns='config_file', values='eff_avail_nines')
-table = filtered_df.pivot(index='k', columns='config_file', values='total_cost_for_10_years')
+#table = filtered_df.pivot(index='k', columns='config_file', values='eff_avail_nines')
+#table = filtered_df.pivot(index='k', columns='config_file', values='total_cost_for_10_years')
+#table = filtered_df.pivot(index='k', columns='config_file', values='total_credit_ratio')
 #table = filtered_df.pivot(index='k', columns='config_file', values='down_cost_for_10_years')
+table = filtered_df.pivot(index='k', columns='config_file', values='cost_per_gb')
 #table = filtered_df.pivot(index='k', columns='config_file', values='repair_cost_for_10_years')
 #table = filtered_df.pivot(index='k', columns='config_file', values='initial_cost')
 #table = filtered_df.pivot(index='k', columns='config_file', values='operation_cost_for_10_years')

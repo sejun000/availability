@@ -45,6 +45,7 @@ def parse_arguments():
     parser.add_argument('--output_file', type=str, default='results.txt', help='Output file path to save results')
     parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
     parser.add_argument('--op_ratio', type=float, default=0.07, help='Over-provisioning ratio')
+    parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
     args = parser.parse_args()
     return args
 
@@ -142,6 +143,7 @@ network_m = args.network_m
 network_k = args.network_k
 network_n = network_m + network_k
 op_ratio = args.op_ratio
+waf_ratio = args.waf_ratio
 
 params_and_results = {}
 params_and_results['total_ssds'] = total_ssds
@@ -168,6 +170,7 @@ params_and_results['dwpd'] = dwpd
 params_and_results['guaranteed_years'] = guaranteed_years
 params_and_results['dwpd_limit'] = dwpd_limit
 params_and_results['op_ratio'] = op_ratio
+params_and_results['waf_ratio'] = waf_ratio
 params_and_results['use_tbwpd'] = use_tbwpd
 params_and_results['tbwpd'] = tbwpd
 params_and_results['simulation'] = simulation
@@ -207,7 +210,7 @@ def output_params_and_results():
 if __name__ == "__main__":
     if (simulation):
         num_simulations = 20000
-        #num_simulations = 100000
+        #num_simulations = 40000
         sim.monte_carlo_simulation(params_and_results, hardware_graph, num_simulations, options, costs)
         print (edges, enclosures, mttfs, mtrs)
     

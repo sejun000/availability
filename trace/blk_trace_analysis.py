@@ -26,32 +26,35 @@ def estimate_device_size(file_path, trace_format):
     
     return max_value  # 블록 크기를 4KB로 가정하고 크기 근사
 
-def run_cache_analysis(trace_file, device_size, policy='all', trace_format='csv'):
+def run_cache_analysis(trace_file, device_size, rw_policy='all', trace_format='csv', cache_policy="LRU"):
     """캐시 크기를 1%, 5%, 10%, 15%, 20%, 25%, 30%로 변경하며 실행"""
-    cache_ratios = [0.023, 0.047, 0.105, 0.176]
-    #cache_ratios = [0.075, 0.085, 0.095, 0.105]
+    #cache_ratios = [0.023, 0.047, 0.105, 0.176]
+    cache_ratios = [0.05618, 0.075, 0.085, 0.095, 0.105]
+    #cache_ratios = [0.01642, 0.01862, 0.023]
     
     for ratio in cache_ratios:
         cache_size = int(device_size * ratio)
-        print(f"\nRunning analysis with cache size: {cache_size} bytes ({ratio*100:.0f}% trace_format {trace_format})")
+        print(f"\nRunning analysis with cache size: {cache_size} bytes ({ratio*100:.5f}% trace_format {trace_format})")
         # print command line 
-        print(f"./cache_sim {trace_file} {cache_size} --policy {policy} --trace_format {trace_format} --cache_trace {str(ratio) + '.trace'}")
+        print(f"./cache_sim {trace_file} {cache_size} --rw_policy {rw_policy} --trace_format {trace_format} --cache_policy {cache_policy} --cache_trace {str(ratio) + '.trace'}")
         # run command line
-        subprocess.run(["./cache_sim", trace_file, str(cache_size), "--policy", policy, "--trace_format", trace_format, "--cache_trace", str(ratio) + ".trace"])
+        subprocess.run(["./cache_sim", trace_file, str(cache_size), "--rw_policy", rw_policy, "--trace_format", trace_format, "--cache_policy", cache_policy, "--cache_trace", "/mnt/nvme2n1/"+ cache_policy + "_" + str(ratio) + ".trace"])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automate Block Cache Analysis for Different Cache Sizes")
     parser.add_argument("trace_file", type=str, help="Path to the block trace file")
     
-    parser.add_argument("--policy", type=str, choices=['all', 'write-only', 'read-only'], default='all', help="Cache policy: all (default) or write-only")
+    parser.add_argument("--rw_policy", type=str, choices=['all', 'write-only', 'read-only'], default='all', help="Cache policy: all (default) or write-only")
+    parser.add_argument("--cache_policy", type=str, choices=['LRU', 'FIFO', "LOG_FIFO"], default='all', help="Cache policy: all (default) or write-only")
     parser.add_argument("--trace_format", type=str, choices=['csv', 'blktrace'], default='csv', help="Trace format: csv (default) or blktrace")
     #parser.add_argument("--device_size", type=int, default=130599218053120, help="Device size in bytes")
     #parser.add_argument("--device_size", type=int, default=17491254312960, help="Device size in bytes")
-    parser.add_argument("--device_size", type=int, default=512_000_000_000, help="Device size in bytes")
+    parser.add_argument("--device_size", type=int, default=21083994456064, help="Device size in bytes")
+    #parser.add_argument("--device_size", type=int, default=512_000_000_000, help="Device size in bytes")
 
     args = parser.parse_args()
     #estimated_device_size = estimate_device_size(args.trace_file, args.trace_format)
     estimated_device_size = args.device_size
     print(f"Estimated Device Size: {estimated_device_size} bytes")
-    run_cache_analysis(args.trace_file, estimated_device_size, args.policy, args.trace_format)
+    run_cache_analysis(args.trace_file, estimated_device_size, args.rw_policy, args.trace_format, args.cache_policy)
 

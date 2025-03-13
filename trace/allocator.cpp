@@ -5,10 +5,11 @@
 #include <stdio.h>
 
 
-DummyAllocator::DummyAllocator(size_t totalSizeInBytes)
+DummyAllocator::DummyAllocator(size_t totalSizeInBytes, size_t blockSizeInBytes)
     : totalSize(totalSizeInBytes)
 {
     // 전체 블록 개수 계산
+    blockSize = blockSizeInBytes;
     maxBlocks = totalSize / blockSize;
     printf("maxBlocks = %ld %ld\n", totalSize, maxBlocks);
     // 블록 할당 상태 벡터 초기화
@@ -28,8 +29,8 @@ DummyAllocator::DummyAllocator(size_t totalSizeInBytes)
 size_t DummyAllocator::alloc() {
     // 더 이상 할당할 블록이 없으면 -1 리턴
     if (freeList.empty()) {
-        return -1;
         assert(false);
+        return -1;
     }
     
     // freeList의 top에서 하나 꺼내서 할당 처리
@@ -44,7 +45,7 @@ size_t DummyAllocator::alloc() {
 bool DummyAllocator::free(size_t id) {
     // id 범위가 유효한지 확인
     if (id < 0 || static_cast<size_t>(id) >= maxBlocks) {
-        printf("id is invalid\n");
+        printf("id is invalid %ld %ld\n", id, maxBlocks);
         assert(false);
         return false;
     }

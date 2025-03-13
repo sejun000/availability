@@ -1,30 +1,30 @@
-#include "lru_cache.h"
+#include "fifo_cache.h"
 #include <cassert>
 
-LRUCache::LRUCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file) : capacity_(capacity), cache_block_size(_cache_block_size), cache_trace(_cache_trace), allocator(capacity * _cache_block_size, _cache_block_size) {
+FIFOCache::FIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file) : capacity_(capacity), cache_block_size(_cache_block_size), cache_trace(_cache_trace), allocator(capacity * _cache_block_size, _cache_block_size) {
     cache_trace_fp = nullptr;
-    //printf("LRU cache created with capacity: %ld\n", capacity);
+    printf("FIFO cache created with capacity: %ld\n", capacity);
     if (cache_trace) {
         cache_trace_fp = fopen(trace_file.c_str(), "w");
     }
 }
 
-LRUCache::~LRUCache() {
+FIFOCache::~FIFOCache() {
     if (cache_trace_fp) {
         fclose(cache_trace_fp);
     }
 }
 
-bool LRUCache::exists(long key) {
+bool FIFOCache::exists(long key) {
     return cacheMap.find(key) != cacheMap.end();
 }
 
-int LRUCache::get_block_size() {
+int FIFOCache::get_block_size() {
     return cache_block_size;
 }
 
-void LRUCache::print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type) {
-    if (cache_trace_fp) {
+void FIFOCache::print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type) {
+   if (cache_trace_fp) {
         long start_block = static_cast<long>(lba_offset / cache_block_size);
         long end_block = static_cast<long>((lba_offset + lba_size) / cache_block_size);
         // print trace as csv format
@@ -56,7 +56,8 @@ void LRUCache::print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_
     }
 }
 
-void LRUCache::touch(long key, OP_TYPE op_type) {
+void FIFOCache::touch(long key, OP_TYPE op_type) {
+    /*
     auto it = cacheMap.find(key);
     if (it != cacheMap.end()) {
         size_t id = it->second.allocated_id;
@@ -68,9 +69,10 @@ void LRUCache::touch(long key, OP_TYPE op_type) {
         };
         cacheMap[key] = cacheEntry;
     }
+    */
 }
 
-void LRUCache::evict_one_block() {
+void FIFOCache::evict_one_block() {
     long oldest = cacheList.front();
     cacheList.pop_front();
     auto second = cacheMap[oldest];
@@ -80,12 +82,12 @@ void LRUCache::evict_one_block() {
     cache_filled = true;
 }
 
-void LRUCache::batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE op_type) {
+void FIFOCache::batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE op_type) {
     for (long block : newBlocks) {
         if (exists(block)) {
             touch(block, op_type);
         } else {
-            while (cacheMap.size() + newBlocks.size() >= static_cast<size_t>(capacity_)) {
+            while(cacheMap.size() + newBlocks.size() >= static_cast<size_t>(capacity_)) {
                 evict_one_block();
                 evicted_blocks++;
             }
@@ -101,11 +103,11 @@ void LRUCache::batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE o
     }
 }
 
-bool LRUCache::is_cache_filled() {
+bool FIFOCache::is_cache_filled() {
     return cache_filled;
 }
 
-size_t LRUCache::size(){
+size_t FIFOCache::size(){
     //printf("cacheMap.size() = %ld\n", cacheMap.size());
     return cacheMap.size();
 }

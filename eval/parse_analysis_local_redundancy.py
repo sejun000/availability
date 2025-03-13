@@ -115,7 +115,8 @@ filtered_df['n'] = filtered_df['m'] + filtered_df['k']
 #table = filtered_df.pivot(index='k', columns='n', values='total_cost_for_10_years')
 #table = filtered_df.pivot(index='k', columns='n', values='down_cost_for_10_years')
 #table = filtered_df.pivot(index='k', columns='n', values='repair_cost_for_10_years')
-table = filtered_df.pivot(index='k', columns='n', values='initial_cost')
+table = filtered_df.pivot(index='k', columns='n', values='cost_per_gb')
+#table = filtered_df.pivot(index='k', columns='n', values='initial_cost')
 #table = filtered_df.pivot(index='k', columns='n', values='operation_cost_for_10_years')
 
 # 표 출력
