@@ -29,16 +29,19 @@ def estimate_device_size(file_path, trace_format):
 def run_cache_analysis(trace_file, device_size, rw_policy='all', trace_format='csv', cache_policy="LRU"):
     """캐시 크기를 1%, 5%, 10%, 15%, 20%, 25%, 30%로 변경하며 실행"""
     #cache_ratios = [0.023, 0.047, 0.105, 0.176]
-    cache_ratios = [0.05618, 0.075, 0.085, 0.095, 0.105]
+    #cache_ratios = [0.075, 0.085, 0.095, 0.105]
+    #cache_ratios = [0.05618, 0.075, 0.085, 0.095, 0.105]
+    cache_ratios = [0.105]
     #cache_ratios = [0.01642, 0.01862, 0.023]
     
     for ratio in cache_ratios:
         cache_size = int(device_size * ratio)
         print(f"\nRunning analysis with cache size: {cache_size} bytes ({ratio*100:.5f}% trace_format {trace_format})")
         # print command line 
-        print(f"./cache_sim {trace_file} {cache_size} --rw_policy {rw_policy} --trace_format {trace_format} --cache_policy {cache_policy} --cache_trace {str(ratio) + '.trace'}")
+        print(f"./cache_sim {trace_file} {cache_size} --rw_policy {rw_policy} --trace_format {trace_format} --cache_policy {cache_policy} --cache_trace {str(ratio) + '.trace'} --cold_trace {str(ratio) + '.cold.trace'}")
         # run command line
-        subprocess.run(["./cache_sim", trace_file, str(cache_size), "--rw_policy", rw_policy, "--trace_format", trace_format, "--cache_policy", cache_policy, "--cache_trace", "/mnt/nvme2n1/"+ cache_policy + "_" + str(ratio) + ".trace"])
+        subprocess.run(["./cache_sim", trace_file, str(cache_size), "--rw_policy", rw_policy, "--trace_format", trace_format, "--cache_policy", cache_policy, "--cache_trace", "/mnt/nvme2n1/"+ cache_policy + "_" + str(ratio) + ".trace", \
+                        "--cold_trace", "/mnt/nvme2n1/"+ cache_policy + "_" + str(ratio) + ".cold.trace"])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automate Block Cache Analysis for Different Cache Sizes")

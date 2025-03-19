@@ -89,11 +89,13 @@ def plot_waf(intervals):
 def main():
     parser = argparse.ArgumentParser(
         description="Calculate WAF from trace file. "
-                    "Use --date (YYYY/MM/DD) and --time (HH:MM) to filter data for a specific minute. "
-                    "If not provided, the entire trace is plotted."
+                    "Use --from_date (YYYY/MM/DD) and --from_time (HH:MM) and --to_date (YYYY/MM/DD) and --to_time (HH:MM) "
+                    "to filter data for a specific time range. If not provided, the entire trace is plotted."
     )
-    parser.add_argument("--date", help="Date in format YYYY/MM/DD")
-    parser.add_argument("--time", help="Time in format HH:MM")
+    parser.add_argument("--from_date", help="Start date in format YYYY/MM/DD")
+    parser.add_argument("--from_time", help="Start time in format HH:MM")
+    parser.add_argument("--to_date", help="End date in format YYYY/MM/DD")
+    parser.add_argument("--to_time", help="End time in format HH:MM")
     parser.add_argument("--file", required=True, help="Path to the trace file")
     args = parser.parse_args()
 
@@ -102,25 +104,25 @@ def main():
         print("No trace blocks found in the file.")
         return
 
-    # 입력이 모두 제공된 경우: 지정된 날짜와 시간(분 단위) 내의 데이터만 필터링
-    if args.date and args.time:
+    # 네 개의 인자가 모두 제공된 경우: 지정된 시간 범위 내의 데이터만 필터링
+    if args.from_date and args.from_time and args.to_date and args.to_time:
         try:
-            filter_start = datetime.datetime.strptime(f"{args.date} {args.time}", "%Y/%m/%d %H:%M")
+            filter_start = datetime.datetime.strptime(f"{args.from_date} {args.from_time}", "%Y/%m/%d %H:%M")
+            filter_end = datetime.datetime.strptime(f"{args.to_date} {args.to_time}", "%Y/%m/%d %H:%M")
         except Exception as e:
             print("Invalid date/time format:", e)
             return
-        # filter: filter_start <= timestamp < filter_start + 1분
-        filter_end = filter_start + timedelta(minutes=1)
         filtered_blocks = [b for b in blocks if filter_start <= b[0] < filter_end]
         if len(filtered_blocks) < 2:
-            print("Not enough data points in the given time window.")
+            print("Not enough data points in the given time range.")
             return
         intervals = compute_waf(filtered_blocks)
-        print("Calculated WAF values for the given time window:")
+        print("Calculated WAF values for the given time range:")
         for t1, t2, waf in intervals:
             print(f"{t1.strftime('%Y-%m-%d %H:%M:%S')} -> {t2.strftime('%Y-%m-%d %H:%M:%S')}: WAF = {waf:.4f}")
+        plot_waf(intervals)
     else:
-        # 입력이 없으면 전체 trace의 데이터를 사용하여 그래프를 그림
+        # 인자가 없으면 전체 trace의 데이터를 사용하여 그래프를 그림
         intervals = compute_waf(blocks)
         if not intervals:
             print("Not enough data points to compute WAF.")

@@ -2,7 +2,7 @@
 #include <list>
 #include <unordered_map>
 #include <string>
-#include <unordered_set>
+#include <set>
 #include "allocator.h"
 #include "icache.h"
 
@@ -10,13 +10,13 @@
 class LRUCache : public ICache {
 public:
     // 생성자: capacity는 블록 단위 최대 개수
-    LRUCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file);
+    LRUCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file, const std::string &cold_trace_file);
     ~LRUCache();
 
     void evict_one_block();
     bool exists(long key);
     void touch(long key, OP_TYPE op_type);
-    void batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE op_type);
+    void batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type);
     bool is_cache_filled();
     int get_block_size();
     void print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type);
@@ -29,6 +29,7 @@ private:
     bool cache_filled;
     bool cache_trace;
     FILE *cache_trace_fp;
+    FILE *cold_trace_fp;
     int cache_block_size;
     DummyAllocator allocator;
 };

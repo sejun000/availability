@@ -17,8 +17,17 @@ void issue_op_to_cache(ICache& cache, long long lba_offset, int lba_size, OP_TYP
     int block_size = cache.get_block_size();
     long start_block = static_cast<long>(lba_offset / block_size);
     long end_block = static_cast<long>((lba_offset + lba_size) / block_size);
-    std::unordered_set<long> newBlocks;
+    long long req_start = lba_offset;
+    long long req_end = lba_offset + lba_size;
+    std::set<long> newBlocks;
     for (long block = start_block; block <= end_block; block++) {
+        long long block_start = static_cast<long long>(block) * block_size;
+        long long block_end = block_start + block_size;    
+        long long left_offset = std::max(block_start, req_start);
+        long long right_offset = std::min(block_end, req_end);
+        if (right_offset <= left_offset) {
+            continue;
+        }
         newBlocks.insert(block);
     }
     cache.batch_insert(newBlocks, op_type);
@@ -70,6 +79,7 @@ int main(int argc, char* argv[]) {
     std::string policy = "all";
     std::string trace_format = "csv";
     std::string cache_trace_output = "";
+    std::string cold_trace_output = "";
     std::string cache_policy = "LRU";
     bool cache_trace = false;
 
@@ -87,13 +97,16 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--cache_trace" && i + 1 < argc) {
             cache_trace_output = argv[++i];
             cache_trace = true;
+        } else if (arg == "--cold_trace" && i + 1 < argc) {
+            cold_trace_output = argv[++i];
         }
+
     }
     // Factory 함수를 이용해 적절한 TraceParser 생성
     ITraceParser* parser = createTraceParser(trace_format);
     long max_cache_blocks = cache_size / block_size;
     printf("max_cache_blocks = %ld\n", max_cache_blocks);
-    ICache* cache = createCache(cache_policy, max_cache_blocks, block_size, cache_trace, cache_trace_output);
+    ICache* cache = createCache(cache_policy, max_cache_blocks, block_size, cache_trace, cache_trace_output, cold_trace_output);
     // 통계 변수 초기화
     long long total_read = 0, total_write = 0;
     long long total_read_size = 0, total_write_size = 0;
@@ -109,7 +122,7 @@ int main(int argc, char* argv[]) {
     
     std::string line;
     long long line_count = 0;
-    const long long line_count_limit = 270000000;
+    const long long line_count_limit = 2700000000;
     
     while (std::getline(infile, line) && line_count < line_count_limit) {
         line_count++;

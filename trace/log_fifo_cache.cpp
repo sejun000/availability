@@ -2,7 +2,7 @@
 #include <cassert>
 #include <algorithm>
 
-LogFIFOCache::LogFIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file)
+LogFIFOCache::LogFIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file, const std::string &cold_trace_file)
     : capacity_(capacity), cache_block_size(_cache_block_size), cache_trace(_cache_trace),
       write_ptr(0)
 {
@@ -17,11 +17,17 @@ LogFIFOCache::LogFIFOCache(long capacity, int _cache_block_size, bool _cache_tra
     if (num_units == 0) num_units = 1;
     log_buffer.resize(num_units, {0, false});
     // 한 캐시 블록은 cache_block_size/4096개의 4K 엔트리로 구성됨.
+    if (cold_trace_file != "") {
+        cold_trace_fp = fopen(cold_trace_file.c_str(), "w");
+    }
 }
 
 LogFIFOCache::~LogFIFOCache() {
     if (cache_trace_fp) {
         fclose(cache_trace_fp);
+    }
+    if (cold_trace_fp) {
+        fclose(cold_trace_fp);
     }
 }
 
@@ -39,9 +45,11 @@ void LogFIFOCache::evict_one_block(){
         mapping.erase(old_key);
     }
     log_buffer[write_ptr].valid = false;
+    const int DUMMY_VALUE = 0;
+    fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", old_key * cache_block_size, cache_block_size, DUMMY_VALUE);
 }
 
-void LogFIFOCache::batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE op_type) {
+void LogFIFOCache::batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) {
     for (auto key : newBlocks) {
         if (exists(key)) {
             auto it = mapping.find(key);
@@ -90,14 +98,15 @@ void LogFIFOCache::print_cache_trace(long long lba_offset, int lba_size, OP_TYPE
             if (op_type == OP_TYPE::READ) {
                 op_string = "R";
             }
+            long long block_start = static_cast<long long>(block) * cache_block_size;
+            long long block_end = block_start + cache_block_size;
+            long long req_start = lba_offset;
+            long long req_end = lba_offset + lba_size;
+            long long left_offset = std::max(block_start, req_start);
+            long long right_offset = std::min(block_end, req_end);
             if (iter != mapping.end()) {
                 size_t id = iter->second;
-                long long block_start = static_cast<long long>(block) * cache_block_size;
-                long long block_end = block_start + cache_block_size;
-                long long req_start = lba_offset;
-                long long req_end = lba_offset + lba_size;
-                long long left_offset = std::max(block_start, req_start);
-                long long right_offset = std::min(block_end, req_end);
+                
                 size_t cache_lba_offset = id * cache_block_size + left_offset % cache_block_size;
                 size_t cache_lba_size = right_offset - left_offset;
                 if (cache_lba_size == 0) {
@@ -105,7 +114,9 @@ void LogFIFOCache::print_cache_trace(long long lba_offset, int lba_size, OP_TYPE
                 }
                 fprintf(cache_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, op_string.c_str(), cache_lba_offset, cache_lba_size, DUMMY_VALUE);
             } else {
-                assert(false);
+                if (right_offset > left_offset) {
+                    assert(false);
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
+#include <set>
 #include <string>
 #include <cstdio>
 #include "allocator.h"
@@ -22,13 +22,13 @@ public:
      * @param _cache_trace: 캐시 trace 기록 여부
      * @param trace_file: trace 기록 파일 경로
      */
-    LogFIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file);
+    LogFIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file, const std::string &cold_trace_file);
     virtual ~LogFIFOCache();
 
     bool exists(long key) override;
     void touch(long key, OP_TYPE op_type) override; // LogFIFOCache에서는 touch는 무시합니다.
     void evict_one_block() override;
-    void batch_insert(const std::unordered_set<long> &newBlocks, OP_TYPE op_type) override;
+    void batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) override;
     bool is_cache_filled() override;
     int get_block_size() override;
     void print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type) override;
@@ -39,6 +39,7 @@ private:
     int cache_block_size;   // 캐시 블록 크기 (바이트 단위)
     bool cache_trace;       // trace 기록 여부
     FILE *cache_trace_fp;   // trace 기록 파일 포인터
+    FILE *cold_trace_fp;
 
     // 내부 로그는 4K 단위로 관리됨.
     std::vector<LogEntry> log_buffer;  // 원형 버퍼 (4K 단위 엔트리)
