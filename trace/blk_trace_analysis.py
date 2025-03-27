@@ -28,10 +28,13 @@ def estimate_device_size(file_path, trace_format):
 
 def run_cache_analysis(trace_file, device_size, rw_policy='all', trace_format='csv', cache_policy="LRU"):
     """캐시 크기를 1%, 5%, 10%, 15%, 20%, 25%, 30%로 변경하며 실행"""
-    #cache_ratios = [0.023, 0.047, 0.105, 0.176]
+    cache_ratios = [0.023, 0.047, 0.105, 0.176]
     #cache_ratios = [0.075, 0.085, 0.095, 0.105]
     #cache_ratios = [0.05618, 0.075, 0.085, 0.095, 0.105]
-    cache_ratios = [0.105]
+    #cache_ratios = [0.105]
+    #cache_ratios = [0.05618, 0.075, 0.085, 0.095, 0.105]
+    #cache_ratios = [0.0123, 0.0164, 0.0186, 0.021, 0.023]
+    #cache_ratios = [0.105]
     #cache_ratios = [0.01642, 0.01862, 0.023]
     
     for ratio in cache_ratios:

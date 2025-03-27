@@ -85,8 +85,10 @@ class SSDRedundancyScheme:
         return self.cached_ssds if cached else self.total_ssds - self.cached_ssds
     def get_cached_prefix(self, cached):
         return "cached_" if cached else ""
+    # inter replicas only for uncached way
     def get_inter_replicas(self, cached):
-        return self.inter_replicas if cached else 0
+        return self.inter_replicas if not cached else 0
+    # intra replicas only for cached way
     def get_intra_replicas(self, cached):
         return self.intra_replicas if cached else 0
 

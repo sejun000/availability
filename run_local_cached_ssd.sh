@@ -1,16 +1,20 @@
 #!/bin/bash
 output_file="analysis_local_redundancy_group_$(date '+%Y%m%d_%H%M%S').txt"
-#parities=(1 2 3 4) # --k
-parities=(3)
-rgroups=(1 2)
-cached_ssds=(0 2 4 8 12)
+parities=(1 2 3 4) # --k
+#parities=(3)
+rgroups=(1)
+cached_ssds=(4 8 12)
+#cached_ssds=(0 2 4 8 12)
+python="pypy3"
 #cached_ssds=(0)
-cache_hit_ratios=(0 0.8139 0.8398 0.878 0.8901)
+cache_hit_ratios=(0.4437 0.6661 0.7169)
+#cache_hit_ratios=(0 0.4072 0.4437 0.6661 0.7169)
 capacity=128_000_000_000_000
-dwpds=(0.1 0.33 1 3)
+dwpds=(0.01 0.033 0.1 0.33 1 3)
 total_ssds=48
 #tier_files=("3tier.json")
 tier_files=("2tier.json")
+#tier_files=("2tier.json" "3tier.json")
 for t in "${tier_files[@]}"; do
     cs_index=0
     for cs in "${cached_ssds[@]}"; do
@@ -27,9 +31,9 @@ for t in "${tier_files[@]}"; do
                     for c in "${capacity[@]}"; do
                         echo -e "\e[1;32m"
                         echo "Running simulation with stripe size: $s, datas: $m, parities: $p, capacity: $c, tier_file: $t"
-                        echo "Command Lines : python3 new_core.py --output_file $output_file --m $m --k $p --intra_replicas 2 --cached_ssds $cs --cached_write_ratio $cached_hit_ratio --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc"
+                        echo "Command Lines : $python new_core.py --output_file $output_file --m $m --k $p --intra_replicas $rgroup --cached_ssds $cs --cached_write_ratio $cached_hit_ratio --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc"
                         echo -e "\e[0m"
-                        python3 new_core.py --output_file $output_file --m $m --k $p --intra_replicas 2 --cached_ssds $cs --cached_write_ratio $cached_hit_ratio --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc
+                        $python new_core.py --output_file $output_file --m $m --k $p --intra_replicas 2 --cached_ssds $cs --cached_write_ratio $cached_hit_ratio --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc
                     done
                 done
             done

@@ -1,7 +1,7 @@
 #pragma once
 #include <list>
 #include <unordered_map>
-#include <set>
+#include <map>
 #include <string>
 #include <cassert>
 #include <tuple>
@@ -23,7 +23,7 @@ public:
     
     virtual bool exists(long key) = 0;
     virtual void touch(long key, OP_TYPE op_type) = 0;
-    virtual void batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) = 0;
+    virtual void batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type) = 0;
     virtual bool is_cache_filled() = 0;
     virtual int get_block_size() = 0;
     virtual void print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type) = 0;

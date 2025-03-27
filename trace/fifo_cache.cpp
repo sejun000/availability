@@ -1,6 +1,8 @@
 #include "fifo_cache.h"
 #include <cassert>
 
+#define EVICTED_BLOCK_SIZE (16) // 64k
+
 FIFOCache::FIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file, const std::string &cold_trace_file) : capacity_(capacity), cache_block_size(_cache_block_size), cache_trace(_cache_trace), allocator(capacity * _cache_block_size, _cache_block_size) {
     cache_trace_fp = nullptr;
     printf("FIFO cache created with capacity: %ld\n", capacity);
@@ -35,7 +37,11 @@ void FIFOCache::print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op
         long end_block = static_cast<long>((lba_offset + lba_size) / cache_block_size);
         // print trace as csv format
         for (long block = start_block; block <= end_block; block++) {
-            CacheEntry entry = cacheMap[block];
+            auto it = cacheMap.find(block);
+            if (it == cacheMap.end()) {
+                continue;
+            }
+            CacheEntry &entry = it->second;
             const int DUMMY_VALUE = 0;
             std::string op_string = "W";
             if (op_type == OP_TYPE::READ) {
@@ -93,14 +99,16 @@ void FIFOCache::evict_one_block() {
     fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", oldest * cache_block_size, cache_block_size, DUMMY_VALUE);
 }
 
-void FIFOCache::batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) {
-    for (long block : newBlocks) {
+void FIFOCache::batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type) {
+    for (auto iter : newBlocks) {
+        long block = iter.first;
+        long lba_size = iter.second;
         if (exists(block)) {
             touch(block, op_type);
         } else {
-            while(cacheMap.size() + newBlocks.size() >= static_cast<size_t>(capacity_)) {
+            while(cacheMap.size() >= static_cast<size_t>(capacity_)) {
                 evict_one_block();
-                evicted_blocks++;
+                evicted_blocks += 1;
             }
             cacheList.push_back(block);
             size_t alloc_id = allocator.alloc();
@@ -110,7 +118,7 @@ void FIFOCache::batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) {
             };
             cacheMap[block] = cacheEntry;
         }
-        write_size_to_cache += cache_block_size;
+        write_size_to_cache += lba_size;
     }
 }
 

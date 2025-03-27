@@ -1,3 +1,4 @@
+import argparse
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Ellipse
 import networkx as nx
@@ -129,8 +130,18 @@ class InteractiveGraph:
         pass
 
 if __name__ == "__main__":
-    file_path = '3tier.json'
+    parser = argparse.ArgumentParser(description="Graph visualization tool")
+    parser.add_argument('--input_file', type=str, default='3tier.json', help='Input JSON file path')
+    parser.add_argument('--output_file', type=str, default=None, help='Output file to save the plot (optional)')
+    args = parser.parse_args()
+
+    file_path = args.input_file
     edges, enclosures, mttfs, mtrs, _, _ = utils.parse_input_from_json(file_path)
     hardware_graph = GraphStructure(edges, enclosures, mttfs, mtrs)
     interactive_graph = InteractiveGraph(hardware_graph)
-    plt.show()
+
+    if args.output_file:
+        plt.savefig(args.output_file)
+        print(f"Graph saved to {args.output_file}")
+    else:
+        plt.show()

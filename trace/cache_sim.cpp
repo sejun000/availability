@@ -6,11 +6,19 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <map>
 #include <tuple>   // std::tuple
+#include <signal.h>
+#include <execinfo.h>
+#include <boost/stacktrace.hpp>
+#include <iostream>
 
-// =======================
-// 캐시 hit 및 정책 관련 함수 구현
-// =======================
+void signal_handler(int signum) {
+    std::cerr << "Received signal " << signum << ", stack trace:\n";
+    std::cerr << boost::stacktrace::stacktrace() << "\n";
+    std::_Exit(1);
+}
+
 
 // LRU 정책: 주어진 lba 범위의 블록들을 캐시에 추가
 void issue_op_to_cache(ICache& cache, long long lba_offset, int lba_size, OP_TYPE op_type) {
@@ -19,7 +27,7 @@ void issue_op_to_cache(ICache& cache, long long lba_offset, int lba_size, OP_TYP
     long end_block = static_cast<long>((lba_offset + lba_size) / block_size);
     long long req_start = lba_offset;
     long long req_end = lba_offset + lba_size;
-    std::set<long> newBlocks;
+    std::map<long, int> newBlocks;
     for (long block = start_block; block <= end_block; block++) {
         long long block_start = static_cast<long long>(block) * block_size;
         long long block_end = block_start + block_size;    
@@ -28,7 +36,7 @@ void issue_op_to_cache(ICache& cache, long long lba_offset, int lba_size, OP_TYP
         if (right_offset <= left_offset) {
             continue;
         }
-        newBlocks.insert(block);
+        newBlocks[block] = right_offset - left_offset;
     }
     cache.batch_insert(newBlocks, op_type);
 }
@@ -68,6 +76,7 @@ void print_stats(bool intermeidate, long long total_read, long long total_write,
 }
 
 int main(int argc, char* argv[]) {
+    signal(SIGSEGV, signal_handler);
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " trace_file cache_size [--block_size N] [--rw_policy all|write-only] [--trace_format csv|blktrace] [--cache_policy LRU/FIFO] [--cache_trace]" << std::endl;
         return 1;

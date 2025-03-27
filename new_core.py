@@ -26,11 +26,10 @@ def parse_arguments():
     parser.add_argument('--cached_network_k', type=int, default=0, help='Number of Parity chunks in network cache tier')
     parser.add_argument('--cached_network_l', type=int, default=0, help='Number of Remaining chunks in network cache tier')
     parser.add_argument('--inter_replicas', type=int, default=0, help='Number of network copys')
-    parser.add_argument('--intra_replicas', type=int, default=0, help='Number of local copys')
+    parser.add_argument('--intra_replicas', type=int, default=0, help='Number of local copys, cache ssds')
     parser.add_argument('--cached_write_ratio', type=float, default=0, help='Cached write ratio relative to total write')
     parser.add_argument('--cached_read_ratio', type=float, default=0.8, help='Cached read ratio relative to total write')
     parser.add_argument('--write_through', action='store_true', help='Flag to indicate if write through is used')
-    parser.add_argument('--total_network_nodes', type=int, default=6, help='Total number of network nodes')
     parser.add_argument('--network_m', type=int, default=6, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
     parser.add_argument('--network_l', type=int, default=0, help='Number of Remaining chunks in network')
@@ -46,6 +45,7 @@ def parse_arguments():
     parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
     parser.add_argument('--op_ratio', type=float, default=0.07, help='Over-provisioning ratio')
     parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
+    parser.add_argument('--nprocs', type=int, default=40, help='Number of processes to use for simulation')
     args = parser.parse_args()
     return args
 
@@ -78,7 +78,6 @@ output_file = args.output_file
 tbwpd = args.tbwpd
 use_tbwpd = args.use_tbwpd
 simulation = args.simulation
-total_network_nodes = args.total_network_nodes
 
 edges, enclosures, mttfs, mtrs, costs, options = parse_input_from_json(args.config_file)
 hardware_graph = GraphStructure(edges, enclosures, mttfs, mtrs)
@@ -99,6 +98,13 @@ simulation = args.simulation
 
 n = m + k + l
 
+network_l = args.network_l
+network_m = args.network_m
+network_k = args.network_k
+network_n = network_m + network_k
+op_ratio = args.op_ratio
+waf_ratio = args.waf_ratio
+
 if (n > total_ssds):
     raise ValueError('The sum of m, kvshould not exceed total_ssds')
 if ((total_ssds - cached_ssds) % (n) != 0):
@@ -117,17 +123,18 @@ if (cached_ssds == 0 and cached_write_ratio != 0):
 if (cached_ssds == 0 and cached_m + cached_k + cached_l > 0):
     raise ValueError('Do not use cached_m, cached_k, cached_l without cached_ssds')
 
+if (inter_replicas > 1):
+    network_m = 1
+    network_k = inter_replicas - 1
+    network_l = 0
+    print ("input network_m and cnetwork_k are ignored, and calculated as 1 and inter_replicas - 1")
+
 if (cached_ssds > 0):
     if (intra_replicas > 1):
         cached_m = 1
         cached_k = intra_replicas - 1
         cached_l = 0
         print ("input cached_m and cached_k are ignored, and calculated as 1 and intra_replicas - 1")
-    if (inter_replicas > 1):
-        cached_network_m = 1
-        cached_network_k = inter_replicas - 1
-        cached_network_l = 0
-        print ("input cached_network_m and cached_network_k are ignored, and calculated as 1 and inter_replicas - 1")
     if ((cached_write_ratio == 0 or cached_write_ratio >= 1) and not args.write_through):
         raise ValueError('cached_write_ratio should be between 0 and 1')
     if (cached_m + cached_k + cached_l > cached_ssds):
@@ -136,14 +143,7 @@ if (cached_ssds > 0):
         raise ValueError('cached_ssds should be divisible by the sum of cached_m, cached_k')
     if (intra_replicas == 1 or inter_replicas == 1):
         raise ValueError('replicas should be more than 1')
-    
 
-network_l = args.network_l
-network_m = args.network_m
-network_k = args.network_k
-network_n = network_m + network_k
-op_ratio = args.op_ratio
-waf_ratio = args.waf_ratio
 
 params_and_results = {}
 params_and_results['total_ssds'] = total_ssds
@@ -174,7 +174,6 @@ params_and_results['waf_ratio'] = waf_ratio
 params_and_results['use_tbwpd'] = use_tbwpd
 params_and_results['tbwpd'] = tbwpd
 params_and_results['simulation'] = simulation
-params_and_results['total_network_nodes'] = total_network_nodes
 params_and_results['ssd_read_bw'] = read_bw
 params_and_results['ssd_write_bw'] = write_bw
 if (args.qlc_cache == True):
@@ -193,6 +192,7 @@ else:
 params_and_results['cached_read_ratio'] = cached_read_ratio
 params_and_results['write_through'] = args.write_through
 params_and_results['config_file'] = args.config_file
+params_and_results['nprocs']= args.nprocs
 
 df = pd.DataFrame(encoding_time_data)
 
@@ -209,8 +209,8 @@ def output_params_and_results():
 
 if __name__ == "__main__":
     if (simulation):
-        num_simulations = 20000
-        #num_simulations = 40000
+        #num_simulations = 20000
+        num_simulations = 40000
         sim.monte_carlo_simulation(params_and_results, hardware_graph, num_simulations, options, costs)
         print (edges, enclosures, mttfs, mtrs)
     

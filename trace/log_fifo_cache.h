@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 #include <unordered_map>
-#include <set>
+#include <map>
 #include <string>
 #include <cstdio>
 #include "allocator.h"
@@ -28,7 +28,7 @@ public:
     bool exists(long key) override;
     void touch(long key, OP_TYPE op_type) override; // LogFIFOCache에서는 touch는 무시합니다.
     void evict_one_block() override;
-    void batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) override;
+    void batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type) override;
     bool is_cache_filled() override;
     int get_block_size() override;
     void print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type) override;

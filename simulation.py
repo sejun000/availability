@@ -189,6 +189,8 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
             degraded_bw = calculate_bottleneck_speed(df, ssd_m, local_failure_count, [local_ssd_read_bw], options, intra_replication)
             rebuilding_bw = calculate_bottleneck_speed(df, ssd_m, local_failure_count, [local_ssd_read_bw, ssd_write_bw * rebuild_speed_up], options, intra_replication)
             tables[prefix + 'intra_rebuilding_bw'][local_failure_count] = rebuilding_bw
+            if (intra_replicas > 0):
+                degraded_bw = degraded_bw / intra_replicas
             # degraded read interferes with other ssds, so we need to reduce the read bw
             total_read_bw_for_ssds = total_read_bw_for_ssds - degraded_bw * degraded_ssds
             # failed ssd can be reconstructed from other ssds, so we need to increase that bw
@@ -230,8 +232,11 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
         if is_other_nodes_catastrophic_failure_and_recoverable(failure_info, ssd_k, network_k, disconnected):
             # failed ssd shall be read from this network to rebuild
             degraded_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'], [bottleneck_read_bw_per_ssd, ssd_write_bw], options, inter_replication)
-            # its degraded ssd count is the same with the simulated nodes
+            # its degraded ssd count is the same with the simulated nodes at average
             degraded_ssd_count = ssd_m + ssd_k + ssd_l - failure_info['failure_count']
+            # if inter replicas is not zero, degraded_bw is degraded by inter replicas
+            if (inter_replicas > 0):
+                degraded_bw = degraded_bw / inter_replicas
             bottleneck_read_bw = bottleneck_read_bw - degraded_bw * degraded_ssd_count
     #print (bottleneck_read_bw, total_read_bw_for_ssds, max_read_performance_without_any_failure, common_module_max_flow, network_m + network_k)
     max_read_performance = min(bottleneck_read_bw, total_read_bw_for_ssds)
@@ -358,7 +363,7 @@ def combinations_count(n, k):
         return 0
     return math.factorial(n) // (math.factorial(k) * math.factorial(n - k))
 
-def generate_network_failure_table(network_n, availability_without_network_parity, availability_without_network_parity_for_cached_ssds, network_availability_table):
+def generate_network_failure_table(cached_network_n, network_n, availability_without_network_parity, availability_without_network_parity_for_cached_ssds, network_availability_table):
     probability = 0
     single_availability = availability_without_network_parity
     single_availability_for_cached_ssds = availability_without_network_parity_for_cached_ssds
@@ -367,8 +372,8 @@ def generate_network_failure_table(network_n, availability_without_network_parit
     for failed_count in range(0, network_n):
         probability += combinations_count(network_n - 1, failed_count) * ((1 - single_availability) ** failed_count) * ((single_availability) ** (network_n - 1 - failed_count))
         network_availability_table['availability'][failed_count] = probability
-    for failed_count in range(0, network_n):
-        probability += combinations_count(network_n - 1, failed_count) * ((1 - single_availability_for_cached_ssds) ** failed_count) * ((single_availability_for_cached_ssds) ** (network_n - 1 - failed_count))
+    for failed_count in range(0, cached_network_n):
+        probability += combinations_count(cached_network_n - 1, failed_count) * ((1 - single_availability_for_cached_ssds) ** failed_count) * ((single_availability_for_cached_ssds) ** (cached_network_n - 1 - failed_count))
         network_availability_table['cached_availability'][failed_count] = probability
     #print (network_availability_table)
 
@@ -382,6 +387,7 @@ def update_network_state(failure_info_per_ssd_group, ssd_redun_scheme, network_a
         prefix = ssd_redun_scheme.get_cached_prefix(cached)
         network_n = ssd_redun_scheme.get_network_m(cached) + ssd_redun_scheme.get_network_k(cached)
         for failed_count in range(0, network_n):
+            #print (prefix, network_availability_table[prefix + 'availability'][failed_count], random_value)
             if (random_value <= network_availability_table[prefix + 'availability'][failed_count]):
                 if failed_count != failure_info['network_failure_count']:
                     failure_info['network_failure_count'] = failed_count
@@ -587,7 +593,7 @@ def get_initial_cost(hardware_graph, node_to_module_map, ssd_total_count, ssd_re
     return initial_cost
 
 def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simulations, options, costs):
-    procs = 40 #os.cpu_count()
+    procs = params_and_results["nprocs"] #os.cpu_count()
     
     batch_size = (num_simulations + procs - 1) // procs
     jobs = []
@@ -807,11 +813,13 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     cached_mttf = guaranteed_years * 365 * 24 * cached_dwpd_limit / dwpd
     
     # convert cached_dwpd as op ratio
+    """
     if (waf_ratio > 0):
         cached_dwpd_limit = cached_dwpd_limit * 6.2 / waf_ratio
     else:
-        cached_dwpd_limit = cached_dwpd_limit * utils.get_waf_from_op(0.07) / utils.get_waf_from_op(op_ratio)
-    print ("op_ratio : ", op_ratio, " waf : ", utils.get_waf_from_op(op_ratio))
+        cached_dwpd_limit = cached_dwpd_limit * utils.get_waf_from_op(0.07) / utils.get_waf_from_op(op_ratio)"
+    """
+    cached_dwpd_limit = cached_dwpd_limit * utils.get_waf_from_op(0.07)
     # for cached ssds
     if (cached_m > 0):
         # total tbwpd is calculated by the sum of the tbwpd of cached and uncached ssds for fair comparison
@@ -872,7 +880,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     except:
         assert (network_k == 0)
     
-    generate_network_failure_table(network_m + network_k, availability_without_network_parity, availability_without_network_parity_for_cached_ssds, network_availability_table)
+    generate_network_failure_table(cached_network_m + cached_network_k, network_m + network_k, availability_without_network_parity, availability_without_network_parity_for_cached_ssds, network_availability_table)
 
     # to reduce remaining time from simulation, we just batch_size as 1 and multiply the simulation time by batch_size
     

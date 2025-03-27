@@ -2,7 +2,7 @@
 #include <list>
 #include <unordered_map>
 #include <string>
-#include <set>
+#include <map>
 #include "allocator.h"
 #include "icache.h"
 
@@ -16,7 +16,7 @@ public:
     bool exists(long key);
     void touch(long key, OP_TYPE op_type);
     void evict_one_block();
-    void batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type);
+    void batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type);
     bool is_cache_filled();
     int get_block_size();
     void print_cache_trace(long long lba_offset, int lba_size, OP_TYPE op_type);

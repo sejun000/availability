@@ -2,6 +2,8 @@
 #include <cassert>
 #include <algorithm>
 
+#define EVICTED_BLOCK_SIZE (16) // 64k
+
 LogFIFOCache::LogFIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file, const std::string &cold_trace_file)
     : capacity_(capacity), cache_block_size(_cache_block_size), cache_trace(_cache_trace),
       write_ptr(0)
@@ -40,6 +42,7 @@ void LogFIFOCache::touch(long key, OP_TYPE op_type) {
 }
 
 void LogFIFOCache::evict_one_block(){
+
     long old_key = log_buffer[write_ptr].key;
     if (mapping.find(old_key) != mapping.end() && mapping[old_key] == write_ptr) {
         mapping.erase(old_key);
@@ -47,10 +50,25 @@ void LogFIFOCache::evict_one_block(){
     log_buffer[write_ptr].valid = false;
     const int DUMMY_VALUE = 0;
     fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", old_key * cache_block_size, cache_block_size, DUMMY_VALUE);
+    // if 64k range has been evicted, remove all 4k entries in the range
+    long start_index_64k = old_key / EVICTED_BLOCK_SIZE * EVICTED_BLOCK_SIZE;
+    for (long index_64k = start_index_64k; index_64k < start_index_64k + EVICTED_BLOCK_SIZE; index_64k++) {
+        if (index_64k == old_key) {
+            continue;
+        }
+        auto it = mapping.find(index_64k);
+        if (it != mapping.end()) {
+            size_t pos = it->second;
+            log_buffer[pos].valid = false;
+            mapping.erase(it);
+        }
+    }
 }
 
-void LogFIFOCache::batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type) {
-    for (auto key : newBlocks) {
+void LogFIFOCache::batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type) {
+    for (auto iter : newBlocks) {
+        long key = iter.first;
+        int lba_size = iter.second;
         if (exists(key)) {
             auto it = mapping.find(key);
             if (it != mapping.end()) {
@@ -63,13 +81,16 @@ void LogFIFOCache::batch_insert(const std::set<long> &newBlocks, OP_TYPE op_type
         if (log_buffer[write_ptr].valid) {
             if (write_ptr < log_buffer.size() && log_buffer[write_ptr].valid) {
                 evict_one_block();
-                evicted_blocks++;
+                evicted_blocks += EVICTED_BLOCK_SIZE;
+            }
+            else {
+                assert(false);
             }
         }
         log_buffer[write_ptr] = { key, true };
         mapping[key] = write_ptr;
         write_ptr = (write_ptr + 1) % log_buffer.size();
-        write_size_to_cache += cache_block_size;
+        write_size_to_cache += lba_size;
     }
 }
 

@@ -73,7 +73,7 @@ input_file = args.input_file
 df = parse_file(input_file)
 
 filtered_df = df[
-    #(df['config_file'] == '2tier.json') &
+    (df['config_file'] == '2tier.json') &
     (df['m'] > 30) &
     (df['k'] == 3)
     #(df['dwpd'] == 0.1)
@@ -113,14 +113,16 @@ filtered_df['n'] = filtered_df['m'] + filtered_df['k']
 filtered_df['col'] = filtered_df['cached_ssds']
 
 # 데이터프레임을 피벗 형태로 변환
-table = filtered_df.pivot(index='dwpd', columns='col', values='avail_nines')
+#table = filtered_df.pivot(index='dwpd', columns='col', values='avail_nines')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='credit_avail_nines')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='avg_time_for_rebuilding')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='eff_avail_nines')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='total_cost_for_10_years')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='total_credit_ratio')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='total_credit_ratio')
-#table = filtered_df.pivot(index='dwpd', columns='col', values='cost_per_gb')
+table = filtered_df.pivot(index='dwpd', columns='col', values='cost_per_gb')
+#table = filtered_df.pivot(index='dwpd', columns='col', values='uncached_ssd_repair_cost_per_year')
+
 #table = filtered_df.pivot(index='dwpd', columns='col', values='down_cost_for_10_years')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='uncached_ssd_repair_cost_for_10_years')
 #table = filtered_df.pivot(index='dwpd', columns='col', values='repair_cost_for_10_years')
