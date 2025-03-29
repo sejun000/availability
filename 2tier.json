@@ -7,7 +7,7 @@
         "highest_local_module": "io_module", 
         "prep_time_for_rebuilding": 4,
         "rebuild_bw_ratio": 0.2,
-        "simulation_years": 20,
+        "simulation_years": 10,
         "avail_file": "availability.txt",
         "tlc_dwpd_limit": 1,
         "qlc_dwpd_limit": 0.26,
@@ -24,7 +24,7 @@
         "tlc_cost_per_gb": 0.2,
         "qlc_cost_per_gb": 0.1,
         "down_time_cost_per_hour": 18000,
-        "network_nodes" : 6
+        "network_nodes" : 8
     },
     "edges": [
         {"start": "switch0", "end": "io_module0", "bandwidth": "12.5G"},
@@ -36,21 +36,21 @@
         "NVMeEnclosure0": ["io_module0", "io_module1"]
     },
     "mttf": {
-        "switch": 4194389,
-        "host_module": 43800,
+        "switch": 211310,
+        "host_module": 267268,
         "backend_module": 43800,
         "io_module": 43800,
         "ssd": 2000000,
-        "NVMeEnclosure": 1212994992,
-        "ControllerBox": 1212994992
+        "NVMeEnclosure": 416666666,
+        "ControllerBox": 416666666
     },
     "cost": {
-        "switch": 28095,
+        "switch": 21753,
         "host_module": 3409,
         "backend_module": 3409,
-        "io_module": 3288,
-        "NVMeEnclosure": 412,
-        "ControllerBox": 412
+        "io_module": 4938,
+        "NVMeEnclosure": 276,
+        "ControllerBox": 276
     },
     "mtr": {
         "switch": 24,

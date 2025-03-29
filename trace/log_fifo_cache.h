@@ -47,7 +47,7 @@ private:
 
     // 현재 유효한 항목에 대한 매핑: key -> log_buffer 인덱스
     std::unordered_map<long, size_t> mapping;
-
+    size_t old_write_ptr;
     // (필요 시) 외부 할당자 사용 – 생성자에서 capacity * cache_block_size 만큼 할당
     //DummyAllocator allocator;
 };

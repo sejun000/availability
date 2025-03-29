@@ -45,7 +45,9 @@ def parse_arguments():
     parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
     parser.add_argument('--op_ratio', type=float, default=0.07, help='Over-provisioning ratio')
     parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
-    parser.add_argument('--nprocs', type=int, default=40, help='Number of processes to use for simulation')
+    parser.add_argument('--nprocs', type=int, default=20, help='Number of processes to use for simulation')
+    parser.add_argument('--box_mttf', type=float, default=0, help='enclosure_mttf')
+    parser.add_argument('--rebuild_bw_ratio', type=float, default=0, help='Rebuild speed ratio')
     args = parser.parse_args()
     return args
 
@@ -193,6 +195,8 @@ params_and_results['cached_read_ratio'] = cached_read_ratio
 params_and_results['write_through'] = args.write_through
 params_and_results['config_file'] = args.config_file
 params_and_results['nprocs']= args.nprocs
+params_and_results['box_mttf'] = args.box_mttf
+params_and_results['rebuild_bw_ratio'] = args.rebuild_bw_ratio
 
 df = pd.DataFrame(encoding_time_data)
 
@@ -210,7 +214,7 @@ def output_params_and_results():
 if __name__ == "__main__":
     if (simulation):
         #num_simulations = 20000
-        num_simulations = 40000
+        num_simulations = 80000
         sim.monte_carlo_simulation(params_and_results, hardware_graph, num_simulations, options, costs)
         print (edges, enclosures, mttfs, mtrs)
     

@@ -6,7 +6,7 @@
 
 LogFIFOCache::LogFIFOCache(long capacity, int _cache_block_size, bool _cache_trace, const std::string &trace_file, const std::string &cold_trace_file)
     : capacity_(capacity), cache_block_size(_cache_block_size), cache_trace(_cache_trace),
-      write_ptr(0)
+      write_ptr(0), old_write_ptr(0)
 {
     if (cache_trace) {
         cache_trace_fp = fopen(trace_file.c_str(), "w");
@@ -49,7 +49,7 @@ void LogFIFOCache::evict_one_block(){
     }
     log_buffer[write_ptr].valid = false;
     const int DUMMY_VALUE = 0;
-    fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", old_key * cache_block_size, cache_block_size, DUMMY_VALUE);
+    //fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", old_key * cache_block_size, cache_block_size, DUMMY_VALUE);
     // if 64k range has been evicted, remove all 4k entries in the range
     long start_index_64k = old_key / EVICTED_BLOCK_SIZE * EVICTED_BLOCK_SIZE;
     for (long index_64k = start_index_64k; index_64k < start_index_64k + EVICTED_BLOCK_SIZE; index_64k++) {
@@ -59,13 +59,20 @@ void LogFIFOCache::evict_one_block(){
         auto it = mapping.find(index_64k);
         if (it != mapping.end()) {
             size_t pos = it->second;
-            log_buffer[pos].valid = false;
-            mapping.erase(it);
+            size_t N = log_buffer.size();
+            size_t diff_b = (old_write_ptr - pos + N) % N;
+            size_t diff_c = (write_ptr - pos + N) % N;
+            if (diff_b != 0 && diff_c != 0 && diff_b <= diff_c) {
+                // evict the block
+                log_buffer[pos].valid = false;
+                mapping.erase(it);
+            }
         }
     }
 }
 
 void LogFIFOCache::batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type) {
+    old_write_ptr = write_ptr;
     for (auto iter : newBlocks) {
         long key = iter.first;
         int lba_size = iter.second;

@@ -132,20 +132,22 @@ int main(int argc, char* argv[]) {
     std::string line;
     long long line_count = 0;
     const long long line_count_limit = 2700000000;
+    const long long cache_write_size_limit = 5949828171264;
     
     while (std::getline(infile, line) && line_count < line_count_limit) {
         line_count++;
         if (line_count % 1000000 == 0) {
             print_stats(true, total_read, total_write, total_read_size, total_write_size, read_hit_size, write_hit_size, cache_write_size, cold_tier_write_size, cold_tier_read_size, max_cache_blocks, cache->size());
         }
-        
+        if (cache_write_size > cache_write_size_limit) {
+            break;
+        }
         // 사용자 구현 parse_trace 함수 호출
         ParsedRow parsed = parser->parseTrace(line);
         // printf ("parsed.dev_id = %s, parsed.op_type = %s, parsed.lba_offset = %lld, parsed.lba_size = %d, parsed.timestamp = %f\n", parsed.dev_id.c_str(), parsed.op_type.c_str(), parsed.lba_offset, parsed.lba_size, parsed.timestamp);
         if (parsed.dev_id.empty()) {
             continue;
         }
-        
         long long write_bytes_to_cache;
         long long evicted_blocks;
         

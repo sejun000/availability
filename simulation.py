@@ -499,13 +499,15 @@ def update_repair_event_for_SSDs(repair_events, current_time, SSDs, flows_and_sp
     for event in updated_repair_events:
         heapq.heappush(repair_events, event)
 
-def initialize_simulation(hardware_graph, ssd_read_bw, total_ssd_count, options):
+def initialize_simulation(hardware_graph, ssd_read_bw, total_ssd_count, options, box_mttf):
     node_to_module_map = {}
     enclosure_to_node_map = {}
     for enclosure in list(hardware_graph.enclosures):
         for module in hardware_graph.mttfs.keys():
             if module in enclosure:
                 node_to_module_map[enclosure] = module
+                if (box_mttf > 0):
+                    hardware_graph.mttfs[module] = box_mttf
                 break
         enclosure_to_node_map[enclosure] = hardware_graph.enclosures[enclosure]
     for node in list(hardware_graph.G.nodes()):
@@ -567,9 +569,9 @@ def get_coefficient_for_cost(module, options):
     if (module == 'io_module'):
         return options['network_nodes']
     if (module == "host_module"):
-        return options['network_nodes']
+        return 1
     if (module == "backend_module"):
-        return options['network_nodes']
+        return 1
     if (module == "NVMeEnclosure"):
         return options['network_nodes']
     return 1
@@ -577,6 +579,8 @@ def get_coefficient_for_cost(module, options):
 
 def get_initial_cost(hardware_graph, node_to_module_map, ssd_total_count, ssd_redun_scheme, cached_ssd_cost, uncached_ssd_cost, costs, options):
     initial_cost = 0
+    cached_initial_cost = 0
+    uncached_initial_cost = 0
     for node in list(hardware_graph.G.nodes()):
         module = node_to_module_map[node]
         initial_cost += costs[module] * get_coefficient_for_cost(module, options)
@@ -588,9 +592,11 @@ def get_initial_cost(hardware_graph, node_to_module_map, ssd_total_count, ssd_re
         cached = ssd_redun_scheme.is_ssd_index_cached(ssd_index)
         if (cached):
             initial_cost += cached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name, options)
+            cached_initial_cost += cached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name, options)
         else:
             initial_cost += uncached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name, options)
-    return initial_cost
+            uncached_initial_cost += uncached_ssd_cost * get_coefficient_for_cost(ssd.SSD_module_name, options)
+    return initial_cost, cached_initial_cost, uncached_initial_cost
 
 def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simulations, options, costs):
     procs = params_and_results["nprocs"] #os.cpu_count()
@@ -640,8 +646,10 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
     total_credit_ratio = 0
     total_cached_ssd_repair_cost = 0
     total_uncached_ssd_repair_cost = 0
+    total_cached_initial_cost = 0
+    total_uncached_initial_cost = 0
 
-    for up_time, cached_up_time, credit_up_time, simulation_time, effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost, time_for_rebuilding, count_for_rebuilding, cached_mttf, mttf, cached_ssd_repair_cost, uncached_ssd_repair_cost in results_from_proc:
+    for up_time, cached_up_time, credit_up_time, simulation_time, effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost, time_for_rebuilding, count_for_rebuilding, cached_mttf, mttf, cached_ssd_repair_cost, uncached_ssd_repair_cost, cached_initial_cost, uncached_initial_cost in results_from_proc:
         total_up_time += up_time
         total_cached_up_time += cached_up_time
         total_credit_up_time += credit_up_time
@@ -664,12 +672,15 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
         total_credit_ratio += nine_to_credit(utils.get_nines(credit_up_time / simulation_time))
         total_cached_ssd_repair_cost += cached_ssd_repair_cost
         total_uncached_ssd_repair_cost += uncached_ssd_repair_cost
+        total_cached_initial_cost += cached_initial_cost
+        total_uncached_initial_cost += uncached_initial_cost
 
     avg_time_for_rebuilding = total_time_for_rebuilding / total_count_for_rebuilding
     avg_initial_cost = initial_cost_sum / procs
     avg_total_cost = total_cost_sum / procs
     total_credit_ratio /= procs
-   
+    total_cached_initial_cost /= procs
+    total_uncached_initial_cost /= procs
     #_, _, p99, p99_9, p99_99 = utils.get_percentile_value(effective_availabilities_dict, False)
     avg_latency, median, p99, p99_9, p99_99 = utils.get_percentile_value(latencies_dict, True)
     if (len(cached_latencies_dict) == 0):
@@ -727,6 +738,8 @@ def monte_carlo_simulation(params_and_results, graph_structure_origin, num_simul
     params_and_results['cached_ssd_repair_cost_per_year'] = cached_ssd_repair_cost_per_year
     params_and_results['uncached_ssd_repair_cost_per_year'] = uncached_ssd_repair_cost_per_year
     params_and_results['initial_cost'] = avg_initial_cost
+    params_and_results['cached_initial_cost'] = total_cached_initial_cost
+    params_and_results['uncached_initial_cost'] = total_uncached_initial_cost
     params_and_results['repair_cost_for_10_years'] = repair_cost_per_year * 10
     params_and_results['down_cost_for_10_years'] = down_cost_per_year * 10
     params_and_results['cached_ssd_repair_cost_for_10_years'] = cached_ssd_repair_cost_per_year * 10
@@ -796,6 +809,10 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     intra_replicas = params_and_results['intra_replicas']
     op_ratio = params_and_results['op_ratio']
     waf_ratio = params_and_results['waf_ratio']
+    rebuild_bw_ratio = params_and_results['rebuild_bw_ratio']
+    if (rebuild_bw_ratio != 0):
+        options['rebuild_bw_ratio'] = rebuild_bw_ratio
+    box_mttf = params_and_results['box_mttf']
     
     cached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity
     uncached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity
@@ -844,7 +861,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     # only 20% of the bandwidth is used for writing
 
     hardware_graph = copy.deepcopy(graph_structure_origin)
-    node_to_module_map, enclosure_to_node_map, max_read_performance_without_any_failure = initialize_simulation(hardware_graph, read_bw, total_ssds, options)
+    node_to_module_map, enclosure_to_node_map, max_read_performance_without_any_failure = initialize_simulation(hardware_graph, read_bw, total_ssds, options, box_mttf)
     flows_and_speed_table = {}
     disconnected_table = {}
     failed_hardware_graph_table = {}
@@ -911,7 +928,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
         
     # Generate failure and repair events
     failed_events = generate_first_failure_events(hardware_graph, node_to_module_map, total_ssds, ssd_redun_scheme)
-    initial_cost = get_initial_cost(hardware_graph, node_to_module_map, total_ssds, ssd_redun_scheme, cached_ssd_cost, uncached_ssd_cost, costs, options)
+    initial_cost, cached_initial_cost, uncached_inital_cost = get_initial_cost(hardware_graph, node_to_module_map, total_ssds, ssd_redun_scheme, cached_ssd_cost, uncached_ssd_cost, costs, options)
     total_cost = initial_cost
     
     prev_time = 0
@@ -1016,7 +1033,7 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
     completed += 1
     assert (timestamp >= simulation_hours * batch_size - 1 and timestamp <= simulation_hours * batch_size + 1)
 
-    queue.put((total_up_time, total_cached_up_time, total_credit_up_time, total_time, total_effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost, total_time_for_rebuilding_ssd0, count_for_rebuilding_ssd0, cached_mttf, mttf, total_cached_ssd_repair_cost, total_uncached_ssd_repair_cost))
+    queue.put((total_up_time, total_cached_up_time, total_credit_up_time, total_time, total_effective_up_time, effective_availabilities, latencies, cached_latencies, initial_cost, total_cost, total_time_for_rebuilding_ssd0, count_for_rebuilding_ssd0, cached_mttf, mttf, total_cached_ssd_repair_cost, total_uncached_ssd_repair_cost, cached_initial_cost, uncached_inital_cost))
     
     return ""
     

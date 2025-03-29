@@ -3,11 +3,11 @@
     {
         "start_module": "switch",
         "end_module": "io_module",
-        "lowest_common_module": "backend_module",
+        "lowest_common_module": "switch",
         "highest_local_module": "io_module", 
         "prep_time_for_rebuilding": 4,
         "rebuild_bw_ratio": 0.2,
-        "simulation_years": 20,
+        "simulation_years": 10,
         "avail_file": "availability.txt",
         "tlc_dwpd_limit": 1,
         "qlc_dwpd_limit": 0.26,
@@ -59,21 +59,21 @@
         "ControllerBox1": ["host_module2", "host_module3", "backend_module2", "backend_module3"]
     },
     "mttf": {
-        "switch": 4194389,
-        "host_module": 716275,
+        "switch": 211310,
+        "host_module": 267268,
         "backend_module": 43800,
-        "io_module": 716275,
+        "io_module": 169978,
         "ssd": 2000000,
-        "NVMeEnclosure": 1212994992,
-        "ControllerBox": 1212994992
+        "NVMeEnclosure": 416666666,
+        "ControllerBox": 416666666
     },
     "cost": {
-        "switch": 28095,
+        "switch": 21753,
         "host_module": 3409,
         "backend_module": 3409,
-        "io_module": 3288,
-        "NVMeEnclosure": 412,
-        "ControllerBox": 412
+        "io_module": 4938,
+        "NVMeEnclosure": 276,
+        "ControllerBox": 276
     },
     "mtr": {
         "switch": 24,
