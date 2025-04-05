@@ -84,6 +84,7 @@ def main():
 
     # 왼쪽 서브플롯: y1 데이터 (범례 정보를 반환받음)
     legend_info = plotter.plot_grouped_bar(
+        fig=fig,
         x_col="x",
         y_col="y1",
         z_col=z_col,
@@ -101,6 +102,7 @@ def main():
 
     # 오른쪽 서브플롯: y2 데이터 (범례는 표시하지 않음)
     plotter.plot_grouped_bar(
+        fig=fig,
         x_col="x",
         y_col="y2",
         z_col=z_col,
@@ -118,17 +120,26 @@ def main():
 
     # z 그룹 범례가 있을 경우, 전역 범례를 상단 중앙에 테두리 없이 추가
     if legend_info is not None:
-        handles, _ = legend_info
-        labels = [f"{args.legend}={i+1}" for i in range(len(handles))]
+        handles, orig_labels = legend_info
+        labels = [f"{args.legend}={label}" for label in orig_labels]
         fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-                   ncol=len(labels), frameon=False, fontsize=13)
+                ncol=len(labels), frameon=False, fontsize=13)
 
+    #if legend_info is not None:
+    #    handles, _ = legend_info
+    #    labels = [args.legend for _ in range(len(handles))]
+    #    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
+                   #ncol=len(labels), frameon=False, fontsize=13)
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.89, bottom=0.24)
+    plt.subplots_adjust(left=0.05, right=0.95)
     if args.output_file:
-        plt.savefig(args.output_file, format="pdf")
+        plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')
         plt.close()
         print(f"Graph saved to {args.output_file}")
+        df.to_csv(args.output_file+".txt", sep='\t', index=False)
     else:
         plt.show()
-
+    
 if __name__ == "__main__":
     main()

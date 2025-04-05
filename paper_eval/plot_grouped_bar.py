@@ -80,6 +80,9 @@ def main():
         y_interval=args.y_interval,
         legend_location=args.legend_location
     )
+    
+    if (args.output_file):
+        df.to_csv(args.output_file+".txt", sep='\t', index=False)
 
 if __name__ == "__main__":
     main()

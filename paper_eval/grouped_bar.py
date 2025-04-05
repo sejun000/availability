@@ -27,7 +27,7 @@ class GroupedBar:
             pivot_df = self.df.pivot(index=x_col, columns=z_col, values=y_col)
             pivot_df = pivot_df.sort_index()
             # 고정된 색상 순서: dodgerblue, orange, green, violet
-            color_sequence = ['dodgerblue', 'orange', 'green', 'violet']
+            color_sequence = ['dodgerblue', 'orange', 'green', 'violet', 'yellow', 'purple', 'pink']
             n = len(pivot_df.columns)
             colors = [color_sequence[i % len(color_sequence)] for i in range(n)]
             pivot_df.plot(kind='bar', ax=ax, color=colors,
@@ -35,7 +35,8 @@ class GroupedBar:
             # 각 막대의 테두리를 명시적으로 검은색으로 설정
             for patch in ax.patches:
                 patch.set_edgecolor('black')
-            legend_labels = [f"{legend_title}={i+1}" for i in range(n)]
+            legend_labels = [f"{legend_title}={label}" for label in pivot_df.columns]
+            #legend_labels = [f"{legend_title}={i+1}" for i in range(n)]
             if show_legend:
                 # 범례를 상단 중앙에, 테두리 없이 표시
                 leg = ax.legend(legend_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
@@ -59,7 +60,10 @@ class GroupedBar:
         if y_thousands:
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
         ax.set_xticks(range(len(pivot_df.index)))  
-        ax.set_xticklabels([str(int(val)) for val in pivot_df.index], rotation=0)
+        ax.set_xticklabels([
+            str(int(val)) if abs(val - int(val)) < 1e-9 else str(val)
+            for val in pivot_df.index
+            ], rotation=0)
         ax.set_frame_on(True)
         ax.set_axisbelow(True)
         ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
@@ -68,8 +72,29 @@ class GroupedBar:
         if y_interval is not None:
             from matplotlib.ticker import MultipleLocator
             ax.yaxis.set_major_locator(MultipleLocator(y_interval))
+        if y_max is not None:
+            # 각 bar에 대해 실제 bar top 값이 y_max를 초과하면 텍스트로 실제값을 표시
+            # (여기서 offset은 y_max 대비 약간의 여백, 필요에 따라 조정)
+            offset = 0.02 * (y_max - (y_min if y_min is not None else 0))
+            for patch in ax.patches:
+                bar_top = patch.get_y() + patch.get_height()
+                if bar_top > y_max:
+                    ax.text(
+                        patch.get_x() + patch.get_width() / 2,  # bar 중앙
+                        y_max + offset,                         # y_max보다 약간 위쪽에 표시
+                        f'{bar_top:.1f}',                        # 실제값 (소수점 없이)
+                        ha='center', va='bottom', fontsize=10, color='black'
+                    )
+        # y축 grid line 객체 순회
+        # 가장 첫번째와 마지막 grid line 숨기기
+        index=0
+        for line in ax.get_ygridlines():
+            if index == 0 or index == len(ax.get_ygridlines()) - 1:
+                line.set_visible(False)
+            index += 1
         if (output_file):
-            plt.savefig(output_file, bbox_inches='tight')
+            plt.savefig(output_file, format="pdf", dpi=600, bbox_inches='tight')
+            #plt.savefig(output_file, bbox_inches='tight')
             print(f"Plot saved to {output_file}")
         else:
             plt.show()

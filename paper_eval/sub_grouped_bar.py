@@ -16,7 +16,7 @@ class SubGroupedBar:
                      title: str = "", xlabel: str = "", ylabel: str = "",
                      legend_title: str = "", output_file: str = None,
                      y_thousands: bool = False, ax=None, show_legend: bool = True, local_legend: bool = False, legend_location: str = "upper right",
-                     y_min: float = None, y_max: float = None, y_interval: float = None):
+                     y_min: float = None, y_max: float = None, y_interval: float = None, fig: plt.Figure = None):
         bar_width = 0.5
         global_legend = None  # global legend 정보를 담을 변수
         
@@ -28,7 +28,7 @@ class SubGroupedBar:
             pivot_df = self.df.pivot(index=x_col, columns=z_col, values=y_col)
             pivot_df = pivot_df.sort_index()
             # 고정된 색상 순서: dodgerblue, orange, green, violet
-            color_sequence = ['dodgerblue', 'orange', 'green', 'violet']
+            color_sequence = ['dodgerblue', 'orange', 'green', 'violet', 'yellow', 'purple', 'pink']
             n = len(pivot_df.columns)
             colors = [color_sequence[i % len(color_sequence)] for i in range(n)]
             pivot_df.plot(kind='bar', ax=ax, color=colors,
@@ -74,12 +74,15 @@ class SubGroupedBar:
         ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=13)
         ax.tick_params(axis='y', labelsize=13)
         ax.set_xticks(range(len(pivot_df.index)))  
-        ax.set_xticklabels([str(int(val)) for val in pivot_df.index], rotation=0)
+        ax.set_xticklabels([
+            str(int(val)) if abs(val - int(val)) < 1e-9 else str(val)
+            for val in pivot_df.index
+            ], rotation=0)
+        #ax.set_xticklabels([str(int(val)) for val in pivot_df.index], rotation=0)
         if y_thousands:
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
         ax.set_frame_on(True)
         ax.set_axisbelow(True)
-        ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
         # ... 기존 코드 끝부분 아래에 추가
         if y_min is not None or y_max is not None:
             ax.set_ylim(bottom=y_min, top=y_max)
@@ -99,4 +102,22 @@ class SubGroupedBar:
                         f'{bar_top:.0f}',                        # 실제값 (소수점 없이)
                         ha='center', va='bottom', fontsize=10, color='black'
                     )
+        ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
+        # 내부적으로 좌표 계산 완료
+        fig.canvas.draw()
+
+        ymin, ymax = ax.get_ylim()
+
+        # get_ygridlines()로 모든 가로 grid line 순회
+        for line in ax.get_ygridlines():
+            # x_data, y_data 형태로 반환 (horizontal line이면 y_data가 같은 값 2개)
+            x_data, y_data = line.get_data()
+            #print (y_data, ymin, ymax)
+            # 혹은 line.get_ydata() 만으로도 확인 가능
+            
+            # 두 점의 y좌표가 모두 ymin(또는 ymax)와 같은 경우가 최솟값/최댓값을 그리는 line
+            if (y_data[0] <= ymin + 1e-8):
+                line.set_visible(False)
+            elif (y_data[0] >= ymax - 1e-8):
+                line.set_visible(False)
         return global_legend

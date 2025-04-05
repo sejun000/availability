@@ -101,10 +101,11 @@ def main():
 
     # 좌우 서브플롯 생성 (1행 2열)
     fig, axs = plt.subplots(1, 2, figsize=(16, 6), sharex=False)
-    plt.subplots_adjust(wspace=0.3)
-
+    plt.subplots_adjust(wspace=0.1)
+    plt.subplots_adjust(left=0.05, right=0.95)
     # 왼쪽: GroupedBar (기존대로, legend 등 필요하면 처리)
     legend_info = plotter_group.plot_grouped_bar(
+        fig=fig,
         x_col="x1",
         y_col="y1",
         z_col="z" if args.z_expr else None,
@@ -133,6 +134,7 @@ def main():
 
     # 오른쪽: StackedBar (legend는 각 서브플롯에 개별적으로 표시)
     plotter_stack.plot_stacked_bar(
+        fig=fig,
         x_col="x2",
         y_cols=y2_cols,
         y_labels=y2_label_list,
@@ -146,11 +148,12 @@ def main():
         y_max=args.y2_max,         # 추가
         y_interval=args.y2_interval  # 추가
     )
-
+    
     # 만약 GroupedBar의 legend를 글로벌로 처리할 필요가 있으면 추가 (여기서는 별도 legend를 두지 않음)
     if args.output_file:
-        plt.savefig(args.output_file, format="pdf")
+        plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')
         plt.close()
+        df.to_csv(args.output_file+".txt", sep='\t', index=False)
         print(f"Graph saved to {args.output_file}")
     else:
         plt.show()

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+from matplotlib.patches import Rectangle
 
 class StackedBar:
     """
@@ -11,8 +12,12 @@ class StackedBar:
 
     def plot_stacked_bar(self, x_col: str, y_cols: list, y_labels: list,
                          title: str = "", xlabel: str = "", ylabel: str = "",
-                         output_file: str = None, y_thousands: bool = False, ax=None, legend_location: str = "upper right",
-                         y_min: float = None, y_max: float = None, y_interval: float = None, fig: plt.Figure = None):
+                         output_file: str = None, y_thousands: bool = False, ax=None,
+                         legend_location: str = "upper right",
+                         y_min: float = None, y_max: float = None, y_interval: float = None,
+                         show_legend: bool = True, fig: plt.Figure = None):
+        if (legend_location == None):
+            legend_location = "upper right"
         if ax is None:
             fig, ax = plt.subplots(figsize=(10,6))
         # x축 값 기준 정렬 및 내부 x 좌표 생성
@@ -36,12 +41,21 @@ class StackedBar:
         ax.tick_params(axis='y', labelsize=13)
         if y_thousands:
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
-        leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
-        leg.get_frame().set_alpha(1)
+            
+        # legend 처리: show_legend True면 local legend 표시, False면 legend info만 반환
+        if show_legend:
+            leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
+            leg.get_frame().set_alpha(1)
+            legend_info = (leg.get_handles(), y_labels)
+        else:
+            # local legend를 그리지 않고, 색상 정보를 이용하여 legend info 생성
+            legend_info = ([Rectangle((0,0),1,1, fc=color_sequence[i % len(color_sequence)], edgecolor='black')
+                             for i in range(len(y_labels))], y_labels)
+            
         if title:
-            ax.text(0.5, -0.27, title, transform=ax.transAxes,
-                    ha='center', fontsize=13)
-            plt.subplots_adjust(bottom=0.25)
+            ax.text(0.5, -0.25, title, transform=ax.transAxes,
+                    ha='center', fontsize=13, clip_on=False)
+            plt.subplots_adjust(bottom=0.3)
         ax.set_frame_on(True)
         ax.set_axisbelow(True)
         ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
@@ -50,7 +64,17 @@ class StackedBar:
         if y_interval is not None:
             from matplotlib.ticker import MultipleLocator
             ax.yaxis.set_major_locator(MultipleLocator(y_interval))
-                # y축 현재 범위 가져오기
+        if y_max is not None:
+            effective_ymin = y_min if y_min is not None else 0
+            offset = 0.03 * (y_max - effective_ymin)  # 약간 띄우는 오프셋
+            for patch in ax.patches:
+                bar_top = patch.get_y() + patch.get_height()
+                if bar_top > y_max:
+                    bar_center_x = patch.get_x() + patch.get_width() / 2
+                    text_str = f"{int(round(bar_top))}"
+                    ax.text(bar_center_x, y_max + offset, text_str,
+                            ha='center', va='bottom', fontsize=10, color='black', clip_on=False)
+
         fig.canvas.draw()
 
         ymin, ymax = ax.get_ylim()
@@ -67,4 +91,4 @@ class StackedBar:
                 line.set_visible(False)
             elif (y_data[0] >= ymax - 1e-8):
                 line.set_visible(False)
-        return ax
+        return legend_info
