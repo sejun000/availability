@@ -96,7 +96,7 @@ void FIFOCache::evict_one_block() {
     allocator.free(id);
     cache_filled = true;
     const int DUMMY_VALUE = 0;
-    fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", oldest * cache_block_size, cache_block_size, DUMMY_VALUE);
+    //fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", oldest * cache_block_size, cache_block_size, DUMMY_VALUE);
 }
 
 void FIFOCache::batch_insert(const std::map<long, int> &newBlocks, OP_TYPE op_type) {

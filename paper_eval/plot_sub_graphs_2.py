@@ -101,8 +101,8 @@ def main():
 
     # 좌우 서브플롯 생성 (1행 2열)
     fig, axs = plt.subplots(1, 2, figsize=(16, 6), sharex=False)
-    plt.subplots_adjust(wspace=0.1)
-    plt.subplots_adjust(left=0.05, right=0.95)
+    plt.subplots_adjust(wspace=0.2)
+    plt.subplots_adjust(left=0.08, right=0.94)
     # 왼쪽: GroupedBar (기존대로, legend 등 필요하면 처리)
     legend_info = plotter_group.plot_grouped_bar(
         fig=fig,
@@ -148,7 +148,7 @@ def main():
         y_max=args.y2_max,         # 추가
         y_interval=args.y2_interval  # 추가
     )
-    
+    plt.subplots_adjust(top=0.94, bottom=0.34)
     # 만약 GroupedBar의 legend를 글로벌로 처리할 필요가 있으면 추가 (여기서는 별도 legend를 두지 않음)
     if args.output_file:
         plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')

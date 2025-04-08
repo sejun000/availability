@@ -45,7 +45,7 @@ def parse_arguments():
     parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
     parser.add_argument('--op_ratio', type=float, default=0.07, help='Over-provisioning ratio')
     parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
-    parser.add_argument('--nprocs', type=int, default=20, help='Number of processes to use for simulation')
+    parser.add_argument('--nprocs', type=int, default=40, help='Number of processes to use for simulation')
     parser.add_argument('--box_mttf', type=float, default=0, help='enclosure_mttf')
     parser.add_argument('--rebuild_bw_ratio', type=float, default=0, help='Rebuild speed ratio')
     args = parser.parse_args()

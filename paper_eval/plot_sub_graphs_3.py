@@ -4,6 +4,21 @@ import matplotlib.pyplot as plt
 from parser import Parser
 from stacked_bar_2 import StackedBar
 
+def reorder_handles(hl, nc):
+    # 원하는 row-major/column-major 변환
+    new = sum((hl[i::nc] for i in range(nc)), [])
+    return new
+def reorder_legend(list, ncol):
+    """
+    col wise -> row wise
+    """
+    new_list = []
+    for i in range(ncol):
+        for j in range((len(list) + ncol - 1)//ncol):
+            if i + j*ncol < len(list):
+                new_list.append(list[i + j*ncol])
+    return new_list
+
 def main():
     parser = argparse.ArgumentParser(
         description="Plot 4 stacked bar subgraphs (2x2 grid) with a single global legend on top center."
@@ -32,6 +47,7 @@ def main():
     parser.add_argument("--y_max", type=float, default=None, help="Maximum y-axis value")
     parser.add_argument("--y_interval", type=float, default=None, help="Y-axis tick interval")
     parser.add_argument("--legend_location", type=str, default=None, help="Legend location")
+    parser.add_argument("--z_col", type=int, default=None, help="Column name for z-axis grouping")
     args = parser.parse_args()
 
     p = Parser()
@@ -61,7 +77,7 @@ def main():
     ylabel = args.y_total_label if args.y_total_label else ""
     
     # 2x2 subplot 생성
-    fig, axs = plt.subplots(2, 2, figsize=(16, 12), sharex=False)
+    fig, axs = plt.subplots(1, 4, figsize=(30, 8), sharex=False)
 
     
     filters = [args.filter_expr1, args.filter_expr2, args.filter_expr3, args.filter_expr4]
@@ -75,7 +91,7 @@ def main():
                 df_sub = df_sub.query(filters[idx])
             except Exception as e:
                 print(f"Error applying filter expression for subplot {idx+1}: {e}")
-        ax = axs[idx // 2, idx % 2]
+        ax = axs[idx % 4]
         plotter = StackedBar(df_sub)
         # 각 subplot에서는 local legend를 그리지 않음 (show_legend=False)
         legend_info = plotter.plot_stacked_bar(
@@ -107,12 +123,20 @@ def main():
             labels = [f"{args.legend}={label}" for label in orig_labels]
         else:
             labels = orig_labels
-        fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-                   ncol=len(labels), frameon=False, fontsize=13)
+        if args.z_col != None:
+            reordered_handle = reorder_handles(handles, args.z_col)
+            reordered_labels = reorder_legend(labels, args.z_col)
+            fig.legend(reordered_handle, reordered_labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
+                   ncol=args.z_col, frameon=False, fontsize=26)
+        else:
+            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
+                   ncol=len(labels), frameon=False, fontsize=26)
+        
         
     plt.tight_layout()
-    plt.subplots_adjust(top=0.93, bottom=0.12)
-    plt.subplots_adjust(hspace=0.35, wspace=0.2)
+    plt.subplots_adjust(top=0.74, bottom=0.34)
+    plt.subplots_adjust(hspace=0.65, wspace=0.3)
+    plt.subplots_adjust(left=0.06, right=0.98)
     if args.output_file:
         plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')
         plt.close()

@@ -3,6 +3,7 @@ import pandas as pd
 from parser import Parser
 from sub_grouped_bar import SubGroupedBar
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 def main():
     parser = argparse.ArgumentParser(
@@ -28,7 +29,9 @@ def main():
     parser.add_argument("--y2_min", type=float, default=None, help="Minimum y-axis value")
     parser.add_argument("--y2_max", type=float, default=None, help="Maximum y-axis value")
     parser.add_argument("--y2_interval", type=float, default=None, help="Y-axis tick interval")
-
+    parser.add_argument("--z_col", default=None, help="Column name for z-axis grouping")
+    #mpl.rcParams['font.family'] = 'Helvetica'
+    #mpl.rcParams['font.size'] = 25  # 폰트 크기도 원하는 대로
     args = parser.parse_args()
 
     p = Parser()
@@ -77,10 +80,13 @@ def main():
 
     plotter = SubGroupedBar(df)
     z_col = "z" if args.z_expr else None
+    
+    mpl.rcParams['font.family'] = 'serif'
+    mpl.rcParams['font.serif'] = ['Times New Roman']
 
     # 좌우 서브플롯 생성 (1행 2열) 및 서브플롯 사이에 여백 추가
     fig, axs = plt.subplots(1, 2, figsize=(16, 6), sharex=True)
-    plt.subplots_adjust(wspace=0.2)
+    plt.subplots_adjust(wspace=0.4, hspace=0.2)
 
     # 왼쪽 서브플롯: y1 데이터 (범례 정보를 반환받음)
     legend_info = plotter.plot_grouped_bar(
@@ -122,17 +128,22 @@ def main():
     if legend_info is not None:
         handles, orig_labels = legend_info
         labels = [f"{args.legend}={label}" for label in orig_labels]
-        fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-                ncol=len(labels), frameon=False, fontsize=13)
+        if args.z_col:
+            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
+                ncol=args.z_col, frameon=False, fontsize=26)
+        else:
+            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
+                ncol=len(labels), frameon=False, fontsize=26)
 
     #if legend_info is not None:
     #    handles, _ = legend_info
     #    labels = [args.legend for _ in range(len(handles))]
     #    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-                   #ncol=len(labels), frameon=False, fontsize=13)
+                   #ncol=len(labels), frameon=False, fontsize=26)
     plt.tight_layout()
-    plt.subplots_adjust(top=0.89, bottom=0.24)
-    plt.subplots_adjust(left=0.05, right=0.95)
+    plt.subplots_adjust(top=0.82, bottom=0.28)
+    plt.subplots_adjust(left=0.08, right=0.96)
+    
     if args.output_file:
         plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')
         plt.close()

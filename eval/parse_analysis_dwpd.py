@@ -74,7 +74,7 @@ df = parse_file(input_file)
 
 filtered_df = df[
     (df['config_file'] == '2tier.json') &
-    (df['m'] > 30) &
+    (df['m'] > 24) &
     (df['k'] == 3)
     #(df['dwpd'] == 0.1)
 ]

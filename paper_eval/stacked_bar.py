@@ -30,17 +30,17 @@ class StackedBar:
         ax.set_xticks(positions)
         ax.set_xticklabels([str(int(val)) for val in actual_x], rotation=0)
         
-        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=13, labelpad=10)
-        ax.set_ylabel(ylabel if ylabel else "", fontsize=13)
-        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=13)
-        ax.tick_params(axis='y', labelsize=13)
+        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=26, labelpad=10)
+        ax.set_ylabel(ylabel if ylabel else "", fontsize=26)
+        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=26)
+        ax.tick_params(axis='y', labelsize=26)
         if y_thousands:
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
-        leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
+        leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=26)
         leg.get_frame().set_alpha(1)
         if title:
-            ax.text(0.5, -0.27, title, transform=ax.transAxes,
-                    ha='center', fontsize=13)
+            ax.text(0.5, -0.45, title, transform=ax.transAxes,
+                    ha='center', fontsize=26)
             plt.subplots_adjust(bottom=0.25)
         ax.set_frame_on(True)
         ax.set_axisbelow(True)

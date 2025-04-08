@@ -11,7 +11,19 @@ class GroupedBar:
     """
     def __init__(self, df):
         self.df = df
-
+    def reorder_legend(self, list, ncol):
+        """
+        col wise -> row wise
+        """
+        new_list = []
+        for i in range(ncol):
+            for j in range(len(list)//ncol):
+                new_list.append(list[i + j*ncol])
+        return new_list
+    def reorder_handles(self, hl, nc):
+        # 원하는 row-major/column-major 변환
+        new = sum((hl[i::nc] for i in range(nc)), [])
+        return new
     def plot_grouped_bar(self, x_col: str, y_col: str, z_col: str = None,
                          title: str = "", xlabel: str = "", ylabel: str = "",
                          legend_title: str = "", output_file: str = None,
@@ -35,11 +47,17 @@ class GroupedBar:
             # 각 막대의 테두리를 명시적으로 검은색으로 설정
             for patch in ax.patches:
                 patch.set_edgecolor('black')
+            print (f"pivot_df.columns: {pivot_df.columns}")
+    
+            pivot_df = pivot_df.reindex(sorted(pivot_df.columns), axis=1)
             legend_labels = [f"{legend_title}={label}" for label in pivot_df.columns]
             #legend_labels = [f"{legend_title}={i+1}" for i in range(n)]
             if show_legend:
                 # 범례를 상단 중앙에, 테두리 없이 표시
-                leg = ax.legend(legend_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
+                handles, labels = ax.get_legend_handles_labels()
+                reorder_legend = self.reorder_legend(legend_labels, 2)
+                reorder_handles = self.reorder_handles(handles, 2)
+                leg = ax.legend(reorder_handles, reorder_legend, loc=legend_location, frameon=True, edgecolor='black', fontsize=26, ncol=2)
                 leg.get_frame().set_alpha(1)
             else:
                 # 범례 제거
@@ -50,12 +68,12 @@ class GroupedBar:
             pivot_df = self.df.sort_values(by=x_col)
             pivot_df.plot(x=x_col, y=y_col, kind='bar', ax=ax,
                           color='skyblue', edgecolor='black', width=bar_width)
-
-        #ax.set_title(title, fontsize=13)
-        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=13, labelpad=10)
-        ax.set_ylabel(ylabel if ylabel else y_col, fontsize=13)
-        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=13)
-        ax.tick_params(axis='y', labelsize=13)
+    
+        #ax.set_title(title, fontsize=26)
+        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=26, labelpad=10)
+        ax.set_ylabel(ylabel if ylabel else y_col, fontsize=26)
+        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=26)
+        ax.tick_params(axis='y', labelsize=26)
 
         if y_thousands:
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
@@ -85,6 +103,8 @@ class GroupedBar:
                         f'{bar_top:.1f}',                        # 실제값 (소수점 없이)
                         ha='center', va='bottom', fontsize=10, color='black'
                     )
+        plt.subplots_adjust(top=0.96, bottom=0.18)
+        plt.subplots_adjust(left=0.14, right=0.96)
         # y축 grid line 객체 순회
         # 가장 첫번째와 마지막 grid line 숨기기
         index=0

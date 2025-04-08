@@ -19,7 +19,7 @@ class StackedBar:
         if (legend_location == None):
             legend_location = "upper right"
         if ax is None:
-            fig, ax = plt.subplots(figsize=(10,6))
+            fig, ax = plt.subplots(figsize=(12,6))
         # x축 값 기준 정렬 및 내부 x 좌표 생성
         df_sorted = self.df.sort_values(by=x_col)
         actual_x = df_sorted[x_col].values  # 실제 x 데이터 (예: [8, 16, 32, 64, 128])
@@ -35,16 +35,16 @@ class StackedBar:
         ax.set_xticks(positions)
         ax.set_xticklabels([str(int(val)) for val in actual_x], rotation=0)
         
-        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=13, labelpad=10)
-        ax.set_ylabel(ylabel if ylabel else "", fontsize=13)
-        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=13)
-        ax.tick_params(axis='y', labelsize=13)
+        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=26, labelpad=10)
+        ax.set_ylabel(ylabel if ylabel else "", fontsize=26)
+        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=24)
+        ax.tick_params(axis='y', labelsize=24)
         if y_thousands:
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
             
         # legend 처리: show_legend True면 local legend 표시, False면 legend info만 반환
         if show_legend:
-            leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
+            leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=26)
             leg.get_frame().set_alpha(1)
             legend_info = (leg.get_handles(), y_labels)
         else:
@@ -53,8 +53,8 @@ class StackedBar:
                              for i in range(len(y_labels))], y_labels)
             
         if title:
-            ax.text(0.5, -0.25, title, transform=ax.transAxes,
-                    ha='center', fontsize=13, clip_on=False)
+            ax.text(0.5, -0.57, title, transform=ax.transAxes,
+                    ha='center', fontsize=26, clip_on=False)
             plt.subplots_adjust(bottom=0.3)
         ax.set_frame_on(True)
         ax.set_axisbelow(True)

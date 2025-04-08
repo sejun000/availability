@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--y_min", default=None, help="Comma-separated minimum y-axis values for each subplot (e.g., '0,0,0')")
     parser.add_argument("--y_max", default=None, help="Comma-separated maximum y-axis values for each subplot (e.g., '0.5,0.5,0.5')")
     parser.add_argument("--y_interval", default=None, help="Comma-separated y-axis tick intervals for each subplot (e.g., '0.05,0.05,0.05')")
+    parser.add_argument("--titles", default="", help="Titles for the entire figure")
 
     parser.add_argument("--filtered_expr", default=None, help="Global filter expression for data (e.g., 'm > 5')")
 
@@ -59,8 +60,12 @@ def main():
     # y_expr와 y_label 처리 (콤마 분리)
     y_expr_list = [expr.strip() for expr in args.y_expr.split(",")]
     y_label_list = [label.strip() for label in args.y_label.split(",")]
+    title_list = [title.strip() for title in args.titles.split(",")]
     if len(y_expr_list) != len(y_label_list):
         print("The number of y_expr and y_label must match.")
+        return
+    if len(y_expr_list) != len(title_list):
+        print("The number of y_expr and titles must match.")
         return
 
     # 각 y_expr 평가하여 새로운 열 생성
@@ -82,7 +87,7 @@ def main():
     elif n_y == 3:
         nrows, ncols = 1, 3
     elif n_y == 4:
-        nrows, ncols = 2, 2
+        nrows, ncols = 1, 4
     else:
         print("Only support up to 4 y expressions.")
         return
@@ -110,8 +115,7 @@ def main():
         y_interval_list = [None]*n_y
 
 
-    fig, axs = plt.subplots(nrows, ncols, figsize=(6 * ncols, 6 * nrows), squeeze=False)
-    plt.subplots_adjust(hspace=0.4, wspace=0.3)
+    fig, axs = plt.subplots(nrows, ncols, figsize=(12 * ncols, 8 * nrows), squeeze=False)
 
     # 만약 z_expr가 제공되면, 고정 색상 팔레트를 사용하여 그룹별 색상 매핑 생성
     groups = sorted(df["z"].dropna().unique())
@@ -143,21 +147,24 @@ def main():
                 subset = df[df["z"] == group]
                 ax.scatter(subset["x"], subset[y_col], marker=marker_styles[groups.index(group) % len(marker_styles)], s=80, color=color_map[group], alpha=0.8)
 
-            ax.set_xlabel(args.x_label if args.x_label else args.x_expr, fontsize=12)
-            ax.set_ylabel(y_label_list[idx], fontsize=12)
-            ax.tick_params(axis='both', labelsize=10)
+            #ax.set_xlabel(args.x_label if args.x_label else args.x_expr, fontsize=25)
+            ax.set_ylabel(y_label_list[idx], fontsize=25)
+            ax.tick_params(axis='both', labelsize=23)
             # x축을 정수형으로 표시
             ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
             if y_min_list[idx] is not None or y_max_list[idx] is not None:
                 ax.set_ylim(bottom=y_min_list[idx], top=y_max_list[idx])
             print (y_interval_list[idx], idx)
+            from matplotlib.ticker import MultipleLocator
             if y_interval_list[idx] is not None:
-                from matplotlib.ticker import MultipleLocator
                 ax.yaxis.set_major_locator(MultipleLocator(y_interval_list[idx]))
+            ax.xaxis.set_major_locator(MultipleLocator(10))
             fig.canvas.draw()
 
             ymin, ymax = ax.get_ylim()
-
+            ax.text(0.5, -0.64, title_list[idx], transform=ax.transAxes,
+                    ha='center', fontsize=26, clip_on=False)
+            ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
             # get_ygridlines()로 모든 가로 grid line 순회
             for line in ax.get_ygridlines():
                 # x_data, y_data 형태로 반환 (horizontal line이면 y_data가 같은 값 2개)
@@ -176,13 +183,15 @@ def main():
     #ax.yaxis.set_major_locator(MultipleLocator(args.y_interval))
     # global legend를 상단 중앙에 표시 (z_expr가 제공된 경우)
             # y축 현재 범위 가져오기
-        
+    fig.text(0.5, 0.15, args.x_label if args.x_label else args.x_expr, ha='center', fontsize=26)
     fig.legend(global_handles, global_labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-                ncol=len(global_labels), frameon=False, fontsize=12)
-    plt.subplots_adjust(top=0.91, bottom=0.12)
-    plt.subplots_adjust(hspace=0.35, wspace=0.2)
+                ncol=len(global_labels), frameon=False, fontsize=26)
+    
     # 전체 여백 조정 (상단에 여백 확보)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    #plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.subplots_adjust(top=0.82, bottom=0.30)
+    plt.subplots_adjust(left=0.07, right=0.93)
+    plt.subplots_adjust(hspace=0.35, wspace=0.54)
     if (args.output_file):
         df.to_csv(args.output_file+".txt", sep='\t', index=False)
         plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')

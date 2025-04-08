@@ -61,7 +61,7 @@ def main():
 
     xlabel = args.xlabel if args.xlabel else args.x_expr
     ylabel = args.ylabel if args.ylabel else args.y_expr
-
+    
     plotter = GroupedBar(df)
     # z_expr가 입력되지 않으면 z_col에 None 전달
     z_col = "z" if args.z_expr else None

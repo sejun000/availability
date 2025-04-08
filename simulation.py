@@ -212,7 +212,10 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
 
         # data loss because of catastrophic failure is more than network_k
         elif judge_state_from_failure_info(failure_info, ssd_redun_scheme, disconnected, cached) == SSD_state_data_loss:
+            old_rebuild_bw_ratio = options["rebuild_bw_ratio"]
+            options["rebuild_bw_ratio"] = 0.2
             rebuilding_bw = calculate_bottleneck_speed(df, network_m, 0, [bottleneck_read_bw_per_ssd, ssd_write_bw], options)
+            options["rebuild_bw_ratio"] = old_rebuild_bw_ratio
             tables[prefix + 'backup_rebuild_speed'] = rebuilding_bw
             #print (disconnected, bottleneck_read_bw_per_ssd, rebuilding_bw)
             # all read is removed from data loss failure, but bottleneck read bw is not changed (it is used for other ssds)
@@ -231,13 +234,15 @@ def calculate_flows_and_speed(df, hardware_graph_copy, failure_info_per_ssd_grou
         # catastrophic failure for the other nodes. reduce the read bw for the simulated nodes
         if is_other_nodes_catastrophic_failure_and_recoverable(failure_info, ssd_k, network_k, disconnected):
             # failed ssd shall be read from this network to rebuild
-            degraded_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'], [bottleneck_read_bw_per_ssd, ssd_write_bw], options, inter_replication)
+            # we can assume that another network nodes also have similar status with the simulated nodes,
+            degraded_bw = calculate_bottleneck_speed(df, network_m, failure_info['network_failure_count'], [bottleneck_read_bw_per_ssd], options, inter_replication)
             # its degraded ssd count is the same with the simulated nodes at average
             degraded_ssd_count = ssd_m + ssd_k + ssd_l - failure_info['failure_count']
             # if inter replicas is not zero, degraded_bw is degraded by inter replicas
             if (inter_replicas > 0):
                 degraded_bw = degraded_bw / inter_replicas
             bottleneck_read_bw = bottleneck_read_bw - degraded_bw * degraded_ssd_count
+            #print ("degraded bw", bottleneck_read_bw, degraded_ssd_count, degraded_bw * degraded_ssd_count)
     #print (bottleneck_read_bw, total_read_bw_for_ssds, max_read_performance_without_any_failure, common_module_max_flow, network_m + network_k)
     max_read_performance = min(bottleneck_read_bw, total_read_bw_for_ssds)
     max_read_performance = min(max_read_performance, common_module_max_flow / options['network_nodes'])
@@ -279,7 +284,8 @@ def calculate_bottleneck_speed(df, m, k, other_bws, options, replication = False
     if (k > 0 and not replication):
         erasure_coding_latency = utils.get_encoding_latency_sec(df, m, k)
     erasure_coding_speed = 256_000 / erasure_coding_latency
-    min_speed = erasure_coding_speed
+    min_speed = erasure_coding_speed * options["erasure_coding_cores"]
+    #print (other_bws, min_speed)
     for other_bw in other_bws:
         if (other_bw * options["rebuild_bw_ratio"] < min_speed):
             min_speed = other_bw * options["rebuild_bw_ratio"]
@@ -330,10 +336,13 @@ def update_all_ssd_states(failure_info_per_ssd_group, SSDs, ssd_redun_scheme, di
 
 def update_ssd_state(ssd_name, failure_info_per_ssd_group, SSDs, capacity, event_type, prep_time_for_rebuilding, ssd_redun_scheme, disconnected):
     ssd_index = ssd.get_ssd_index(ssd_name)
+    cached = ssd_redun_scheme.is_ssd_index_cached(ssd_index)
     if (event_type == 'fail'):
         assert SSDs[ssd_index]['failed'] == False
         SSDs[ssd_index]['failed'] = True
         SSDs[ssd_index]['remaining_capacity_to_rebuild'] = capacity
+        if cached:
+            SSDs[ssd_index]['remaining_capacity_to_rebuild'] = capacity / 2
         SSDs[ssd_index]['rebuild_speed'] = 0
         SSDs[ssd_index]['remaining_prep_time_for_rebuilding'] = random.expovariate(1 / prep_time_for_rebuilding)
         
@@ -341,7 +350,6 @@ def update_ssd_state(ssd_name, failure_info_per_ssd_group, SSDs, capacity, event
         assert SSDs[ssd_index]['failed'] == True
         SSDs[ssd_index]['failed'] = False
     
-    cached = ssd_redun_scheme.is_ssd_index_cached(ssd_index)
     m = ssd_redun_scheme.get_m(cached)
     k = ssd_redun_scheme.get_k(cached)
     l = ssd_redun_scheme.get_l(cached)
@@ -569,9 +577,9 @@ def get_coefficient_for_cost(module, options):
     if (module == 'io_module'):
         return options['network_nodes']
     if (module == "host_module"):
-        return 1
+        return options['network_nodes']
     if (module == "backend_module"):
-        return 1
+        return options['network_nodes']
     if (module == "NVMeEnclosure"):
         return options['network_nodes']
     return 1
@@ -814,8 +822,8 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
         options['rebuild_bw_ratio'] = rebuild_bw_ratio
     box_mttf = params_and_results['box_mttf']
     
-    cached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity
-    uncached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity
+    cached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity / 2
+    uncached_ssd_cost = options['tlc_cost_per_gb'] / 1_000_000_000 * capacity / 2
     if (params_and_results['qlc_cache'] == True):
         cached_ssd_cost = options['qlc_cost_per_gb'] / 1_000_000_000 * capacity
     if params_and_results['qlc'] == True:
@@ -837,10 +845,11 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
         cached_dwpd_limit = cached_dwpd_limit * utils.get_waf_from_op(0.07) / utils.get_waf_from_op(op_ratio)"
     """
     cached_dwpd_limit = cached_dwpd_limit * utils.get_waf_from_op(0.07)
+    cached_dwpd_limit /= 2 # cache ssd is always half capacity
     # for cached ssds
     if (cached_m > 0):
         # total tbwpd is calculated by the sum of the tbwpd of cached and uncached ssds for fair comparison
-        total_tbwpd = capacity * total_ssds * dwpd / 1_000_000_000_000
+        total_tbwpd = capacity * (total_ssds - cached_ssds) * dwpd / 1_000_000_000_000
         if (use_tbwpd):
             total_tbwpd = tbwpd
         #effective_total_tbwpd = total_tbwpd * (cached_ssds / total_ssds * effective_capacity_for_cached + (total_ssds - cached_ssds) / total_ssds * effective_capacity_for_uncached)
@@ -851,7 +860,8 @@ def simulation_per_core(simulation_idx, params_and_results, graph_structure_orig
             #cached_tbwpd = total_tbwpd * cached_write_ratio / cached_ssds
             cached_tbwpd = total_tbwpd / cached_ssds
             uncached_tbwpd = total_tbwpd * (1 - cached_write_ratio) / (total_ssds - cached_ssds)
-        cached_mttf = guaranteed_years * 365 * 24 * (cached_dwpd_limit * capacity / 1_000_000_000_000) / cached_tbwpd
+            # cache ssd is always half capacity
+        cached_mttf = guaranteed_years * 365 * 24 * (cached_dwpd_limit * (capacity / 2) / 1_000_000_000_000) / cached_tbwpd
         mttf = guaranteed_years * 365 * 24 * (dwpd_limit * capacity / 1_000_000_000_000) / uncached_tbwpd
             #print (cached_mttf, mttf, cached_tbwpd, uncached_tbwpd, total_tbwpd)
     

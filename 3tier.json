@@ -24,7 +24,8 @@
         "tlc_cost_per_gb": 0.2,
         "qlc_cost_per_gb": 0.1,
         "down_time_cost_per_hour": 18000,
-        "network_nodes" : 6
+        "network_nodes" : 8,
+        "erasure_coding_cores": 4
     },
     "edges": [
         {"start": "switch0", "end": "host_module0", "bandwidth": "12.5G"},

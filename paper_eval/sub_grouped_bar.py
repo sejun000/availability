@@ -44,7 +44,7 @@ class SubGroupedBar:
                         ax.get_legend().remove()
                 else:
                     legend_labels = [f"{legend_title}={i+1}" for i in range(n)]
-                    leg = ax.legend(legend_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=13)
+                    leg = ax.legend(legend_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=26,  ncol=2)
                     leg.get_frame().set_alpha(1)
                 global_legend = (handles, labels)
             else:
@@ -61,18 +61,18 @@ class SubGroupedBar:
         # 기존의 서브플롯 제목은 제거하고, 제목은 서브플롯 아래에 텍스트로 표시합니다.
         if title:
             # y 좌표는 필요에 따라 조정 (여기서는 -0.15로 설정)
-            ax.text(0.5, -0.27, title, transform=ax.transAxes,
-                    ha='center', fontsize=13)
+            ax.text(0.5, -0.45, title, transform=ax.transAxes,
+                    ha='center', fontsize=26)
             plt.subplots_adjust(bottom=0.25)
        # else:
         #    leg = ax.get_legend()
         #    if leg:
         #        leg.remove()
 
-        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=13, labelpad=10)
-        ax.set_ylabel(ylabel if ylabel else y_col, fontsize=13)
-        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=13)
-        ax.tick_params(axis='y', labelsize=13)
+        ax.set_xlabel(xlabel if xlabel else x_col, fontsize=26, labelpad=10)
+        ax.set_ylabel(ylabel if ylabel else y_col, fontsize=26)
+        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=26)
+        ax.tick_params(axis='y', labelsize=26)
         ax.set_xticks(range(len(pivot_df.index)))  
         ax.set_xticklabels([
             str(int(val)) if abs(val - int(val)) < 1e-9 else str(val)
@@ -100,7 +100,7 @@ class SubGroupedBar:
                         patch.get_x() + patch.get_width() / 2,  # bar 중앙
                         y_max + offset,                         # y_max보다 약간 위쪽에 표시
                         f'{bar_top:.0f}',                        # 실제값 (소수점 없이)
-                        ha='center', va='bottom', fontsize=10, color='black'
+                        ha='center', va='bottom', fontsize=20, color='black'
                     )
         ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
         # 내부적으로 좌표 계산 완료
