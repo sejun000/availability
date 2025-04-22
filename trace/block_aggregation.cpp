@@ -133,9 +133,9 @@ int main(int argc, char* argv[])
             firstLine = false;
         }
         // 첫 행의 timestamp로부터 10일을 초과하면 중단 (정렬되어 있다고 가정)
-       // if (ts - baseTimestamp > 86400 * 1000ULL * 1000ULL) {
-        //    break;
-        //}
+        if (ts - baseTimestamp > 86400 * 1000ULL * 1000ULL) {
+            break;
+        }
         // 해당 devId가 사용자 지정 리스트에 있는지 확인
         if (prefixMap.find(devId) == prefixMap.end()) {
             // 포함되지 않은 device -> 스킵
