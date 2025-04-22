@@ -11,10 +11,10 @@
         "avail_file": "availability.txt",
         "tlc_dwpd_limit": 1,
         "qlc_dwpd_limit": 0.26,
-        "tlc_write_bw": "7064M",
-        "qlc_write_bw": "1.4G",
-        "tlc_read_bw": "12G",
-        "qlc_read_bw": "12G", 
+        "tlc_write_bw": "4G",
+        "qlc_write_bw": "4G",
+        "tlc_read_bw": "7G",
+        "qlc_read_bw": "7G", 
         "tlc_read_latency": "15us",
         "qlc_read_latency": "30us",
         "tcp_stack_latency": "30us",
@@ -40,7 +40,7 @@
         "switch": 211310,
         "host_module": 267268,
         "backend_module": 43800,
-        "io_module": 43800,
+        "io_module": 3096,
         "ssd": 2000000,
         "NVMeEnclosure": 416666666,
         "ControllerBox": 416666666
@@ -50,16 +50,16 @@
         "host_module": 3409,
         "backend_module": 3409,
         "io_module": 4938,
-        "NVMeEnclosure": 276,
-        "ControllerBox": 276
+        "NVMeEnclosure": 1166,
+        "ControllerBox": 1166
     },
     "mtr": {
-        "switch": 24,
-        "host_module": 24,
-        "backend_module": 24,
-        "io_module": 24,
-        "ssd": 8,
-        "NVMeEnclosure": 12,
-        "ControllerBox": 24
+        "switch": 4,
+        "host_module": 4,
+        "backend_module": 4,
+        "io_module": 0.25,
+        "ssd": 4,
+        "NVMeEnclosure": 2,
+        "ControllerBox": 4
     }
 }

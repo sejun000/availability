@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--y2_max", type=float, default=None, help="Maximum y-axis value")
     parser.add_argument("--y2_interval", type=float, default=None, help="Y-axis tick interval")
     parser.add_argument("--z_col", default=None, help="Column name for z-axis grouping")
+    parser.add_argument("--legend_type", type=str, default="equal", help="legend type")
     #mpl.rcParams['font.family'] = 'Helvetica'
     #mpl.rcParams['font.size'] = 25  # 폰트 크기도 원하는 대로
     args = parser.parse_args()
@@ -127,7 +128,11 @@ def main():
     # z 그룹 범례가 있을 경우, 전역 범례를 상단 중앙에 테두리 없이 추가
     if legend_info is not None:
         handles, orig_labels = legend_info
-        labels = [f"{args.legend}={label}" for label in orig_labels]
+        if args.legend_type == "equal":
+            labels = [f"{args.legend}={label}" for label in orig_labels]
+        else:
+            labels = [f"{label} {args.legend}" if label != "0" else "No TLC" for label in orig_labels]
+
         if args.z_col:
             fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
                 ncol=args.z_col, frameon=False, fontsize=26)

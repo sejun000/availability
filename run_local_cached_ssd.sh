@@ -1,6 +1,6 @@
 #!/bin/bash
-output_file="analysis_local_redundancy_group_$(date '+%Y%m%d_%H%M%S').txt"
-parities=(1 2 3 4) # --k
+output_file="analysis_cached_redundancy_group_$(date '+%Y%m%d_%H%M%S').txt"
+parities=(3) # --k
 #parities=(3)
 rgroups=(1)
 #cached_ssds=(4 8 12)
@@ -11,7 +11,7 @@ python="pypy3"
 #cache_hit_ratios=(0 0.56 0.47 0.38 0.33)
 cache_hit_ratios=(0 0.4151 0.438 0.4609 0.5289 0.592 0.6147)
 capacity=64_000_000_000_000
-dwpds=(0.01 0.033 0.1 0.33 1 3)
+dwpds=(0.02 0.066 0.2 0.66 2)
 total_ssds=48
 #tier_files=("3tier.json")
 tier_files=("2tier.json")

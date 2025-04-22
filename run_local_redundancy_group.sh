@@ -4,7 +4,7 @@ data=(8 16 24 48) # m+k
 parities=(1 2 3 4) # --k
 capacity=64_000_000_000_000
 rebuild_bw_ratios=(0.2)
-dwpd=0.1
+dwpd=0.2
 total_ssds=48
 tier_files=("2tier.json")
 python="pypy3"
@@ -22,7 +22,7 @@ for t in "${tier_files[@]}"; do
                     echo "Running simulation with stripe size: $s, datas: $m, parities: $p, capacity: $c, tier_file: $t"
                     echo "Command Lines : $python new_core.py --output_file $output_file --m $m --k $p --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc"
                     echo -e "\e[0m"
-                    $python new_core.py --output_file $output_file --m $m --k $p --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc --rebuild_bw_ratio $ratio
+                    $python new_core.py --output_file $output_file --m $m --k $p --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc --rebuild_bw_ratio $ratio --target_performance 0.5
                 done
             done
         done

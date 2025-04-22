@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--y_max", type=float, default=None, help="Maximum y-axis value")
     parser.add_argument("--y_interval", type=float, default=None, help="Y-axis tick interval")
     parser.add_argument("--legend_location", default="upper right", help="Location of the legend (default: 'upper right')")
+    parser.add_argument("--legend_type", type=str, default="equal", help="legend type")
+    
     args = parser.parse_args()
 
     p = Parser()
@@ -78,7 +80,8 @@ def main():
         y_min=args.y_min,
         y_max=args.y_max,
         y_interval=args.y_interval,
-        legend_location=args.legend_location
+        legend_location=args.legend_location,
+        legend_type=args.legend_type
     )
     
     if (args.output_file):
