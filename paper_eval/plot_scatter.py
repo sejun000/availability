@@ -115,7 +115,7 @@ def main():
         y_interval_list = [None]*n_y
 
 
-    fig, axs = plt.subplots(nrows, ncols, figsize=(12 * ncols, 8 * nrows), squeeze=False)
+    fig, axs = plt.subplots(nrows, ncols, figsize=(8 * ncols,  5 * nrows), squeeze=False)
 
     # 만약 z_expr가 제공되면, 고정 색상 팔레트를 사용하여 그룹별 색상 매핑 생성
     groups = sorted(df["z"].dropna().unique())
@@ -158,11 +158,12 @@ def main():
             from matplotlib.ticker import MultipleLocator
             if y_interval_list[idx] is not None:
                 ax.yaxis.set_major_locator(MultipleLocator(y_interval_list[idx]))
-            ax.xaxis.set_major_locator(MultipleLocator(10))
+            ax.xaxis.set_major_locator(MultipleLocator(5))
+            ax.set_xlim(75, 100)
             fig.canvas.draw()
 
             ymin, ymax = ax.get_ylim()
-            ax.text(0.5, -0.64, title_list[idx], transform=ax.transAxes,
+            ax.text(0.5, -0.44, title_list[idx], transform=ax.transAxes,
                     ha='center', fontsize=26, clip_on=False)
             ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
             # get_ygridlines()로 모든 가로 grid line 순회
@@ -183,15 +184,15 @@ def main():
     #ax.yaxis.set_major_locator(MultipleLocator(args.y_interval))
     # global legend를 상단 중앙에 표시 (z_expr가 제공된 경우)
             # y축 현재 범위 가져오기
-    fig.text(0.5, 0.15, args.x_label if args.x_label else args.x_expr, ha='center', fontsize=26)
+    fig.text(0.5, 0.10, args.x_label if args.x_label else args.x_expr, ha='center', fontsize=26)
     fig.legend(global_handles, global_labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
                 ncol=len(global_labels), frameon=False, fontsize=26)
     
     # 전체 여백 조정 (상단에 여백 확보)
     #plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.subplots_adjust(top=0.82, bottom=0.30)
+    plt.subplots_adjust(top=0.82, bottom=0.25)
     plt.subplots_adjust(left=0.07, right=0.93)
-    plt.subplots_adjust(hspace=0.35, wspace=0.54)
+    plt.subplots_adjust(hspace=0.35, wspace=0.34)
     if (args.output_file):
         df.to_csv(args.output_file+".txt", sep='\t', index=False)
         plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')

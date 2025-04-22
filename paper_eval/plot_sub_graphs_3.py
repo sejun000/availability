@@ -43,9 +43,9 @@ def main():
     parser.add_argument("--output_file", default=None, help="Optional output file path (PDF format)")
     parser.add_argument("--y_thousands", action="store_true", 
                         help="Format y-axis tick labels with thousand separators")
-    parser.add_argument("--y_min", type=float, default=None, help="Minimum y-axis value")
-    parser.add_argument("--y_max", type=float, default=None, help="Maximum y-axis value")
-    parser.add_argument("--y_interval", type=float, default=None, help="Y-axis tick interval")
+    parser.add_argument("--y_min", default=None, help="Comma-separated minimum y-axis values for each subplot (e.g., '0,0,0')")
+    parser.add_argument("--y_max", default=None, help="Comma-separated maximum y-axis values for each subplot (e.g., '0.5,0.5,0.5')")
+    parser.add_argument("--y_interval", default=None, help="Comma-separated y-axis tick intervals for each subplot (e.g., '0.05,0.05,0.05')")
     parser.add_argument("--legend_location", type=str, default=None, help="Legend location")
     parser.add_argument("--z_col", type=int, default=None, help="Column name for z-axis grouping")
     args = parser.parse_args()
@@ -54,6 +54,10 @@ def main():
     df = p.parse_file_to_dataframe(args.input_file)
     print("Parsed DataFrame:")
     print(df.head())
+
+    y_min_list = [float(min_val.strip()) for min_val in args.y_min.split(",")] if args.y_min else None
+    y_max_list = [float(max_val.strip()) for max_val in args.y_max.split(",")] if args.y_max else None
+    y_interval_list = [float(interval.strip()) for interval in args.y_interval.split(",")] if args.y_interval else None
 
     try:
         df["x"] = df.eval(args.x_expr)
@@ -77,7 +81,7 @@ def main():
     ylabel = args.y_total_label if args.y_total_label else ""
     
     # 2x2 subplot 생성
-    fig, axs = plt.subplots(1, 4, figsize=(30, 8), sharex=False)
+    fig, axs = plt.subplots(1, 4, figsize=(30, 7), sharex=False)
 
     
     filters = [args.filter_expr1, args.filter_expr2, args.filter_expr3, args.filter_expr4]
@@ -106,9 +110,9 @@ def main():
             y_thousands=args.y_thousands,
             ax=ax,
             legend_location=args.legend_location,
-            y_min=args.y_min,
-            y_max=args.y_max,
-            y_interval=args.y_interval,
+            y_min=y_min_list[idx] if y_min_list else None,
+            y_max=y_max_list[idx] if y_max_list else None,
+            y_interval=y_interval_list[idx] if y_interval_list else None,
             show_legend=False
         )
         # global legend info를 첫 번째 subplot에서 받아둡니다.
@@ -134,7 +138,7 @@ def main():
         
         
     plt.tight_layout()
-    plt.subplots_adjust(top=0.74, bottom=0.34)
+    plt.subplots_adjust(top=0.74, bottom=0.24)
     plt.subplots_adjust(hspace=0.65, wspace=0.3)
     plt.subplots_adjust(left=0.06, right=0.98)
     if args.output_file:

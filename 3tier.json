@@ -60,16 +60,16 @@
         "ControllerBox1": ["host_module2", "host_module3", "backend_module2", "backend_module3"]
     },
     "mttf": {
-        "switch": 211310,
+        "switch": 9999999999,
         "host_module": 267268,
-        "backend_module": 43800,
+        "backend_module": 3096,
         "io_module": 169978,
         "ssd": 2000000,
         "NVMeEnclosure": 416666666,
         "ControllerBox": 416666666
     },
     "cost": {
-        "switch": 21753,
+        "switch": 0,
         "host_module": 3409,
         "backend_module": 3409,
         "io_module": 4938,
@@ -79,7 +79,7 @@
     "mtr": {
         "switch": 24,
         "host_module": 24,
-        "backend_module": 24,
+        "backend_module": 0.017,
         "io_module": 24,
         "ssd": 8,
         "NVMeEnclosure": 12,

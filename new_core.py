@@ -30,7 +30,7 @@ def parse_arguments():
     parser.add_argument('--cached_write_ratio', type=float, default=0, help='Cached write ratio relative to total write')
     parser.add_argument('--cached_read_ratio', type=float, default=0.8, help='Cached read ratio relative to total write')
     parser.add_argument('--write_through', action='store_true', help='Flag to indicate if write through is used')
-    parser.add_argument('--network_m', type=int, default=6, help='Number of Data chunks in network')
+    parser.add_argument('--network_m', type=int, default=8, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
     parser.add_argument('--network_l', type=int, default=0, help='Number of Remaining chunks in network')
     parser.add_argument('--capacity', type=int, default=64_000_000_000_000, help='Capacity of SSDs')
@@ -47,7 +47,9 @@ def parse_arguments():
     parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
     parser.add_argument('--nprocs', type=int, default=40, help='Number of processes to use for simulation')
     parser.add_argument('--box_mttf', type=float, default=0, help='enclosure_mttf')
+    parser.add_argument('--io_module_mttf', type=float, default=0, help='io_module_mttf')
     parser.add_argument('--rebuild_bw_ratio', type=float, default=0, help='Rebuild speed ratio')
+    parser.add_argument('--target_performance', type=float, default=0.5, help='Target performance')
     args = parser.parse_args()
     return args
 
@@ -196,6 +198,8 @@ params_and_results['write_through'] = args.write_through
 params_and_results['config_file'] = args.config_file
 params_and_results['nprocs']= args.nprocs
 params_and_results['box_mttf'] = args.box_mttf
+params_and_results['io_module_mttf'] = args.io_module_mttf
+params_and_results['target_performance'] = args.target_performance
 params_and_results['rebuild_bw_ratio'] = args.rebuild_bw_ratio
 
 df = pd.DataFrame(encoding_time_data)

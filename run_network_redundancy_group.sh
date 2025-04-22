@@ -2,7 +2,7 @@ output_file="analysis_network_redundancy_group_$(date '+%Y%m%d_%H%M%S').txt"
 data=(8 16 24 48) # m+k
 parities=(0 1 2 3 4) # --k
 replicas=(0 2 3 4)
-rebuild_bw_ratios=(0.2 0.4 0.6 0.8)
+rebuild_bw_ratios=(0.02)
 capacity=64_000_000_000_000
 dwpd=0.1
 total_ssds=48
@@ -31,7 +31,7 @@ for t in "${tier_files[@]}"; do
                 echo "Running simulation with stripe size: $s, datas: $m, parities: $p, capacity: $c, tier_file: $t"
                 echo  "Command Lines : python3 new_core.py --output_file $output_file --m 1 --k 0 --network_m $m --network_k $p --capacity $c --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc"
                 echo -e "\e[0m"
-                python3 new_core.py --output_file $output_file --m 1 --k 0 --network_m $m --network_k $p --capacity $capacity --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc --rebuild_bw_ratio $ratio
+                pypy3 new_core.py --output_file $output_file --m 1 --k 0 --network_m $m --network_k $p --capacity $capacity --config_file $t --simulation --total_ssds $total_ssds --dwpd $dwpd --qlc --rebuild_bw_ratio $ratio
             done
         done
     done

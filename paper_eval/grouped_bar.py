@@ -17,8 +17,9 @@ class GroupedBar:
         """
         new_list = []
         for i in range(ncol):
-            for j in range(len(list)//ncol):
-                new_list.append(list[i + j*ncol])
+            for j in range((len(list) + ncol - 1)//ncol):
+                if i + j*ncol < len(list):
+                    new_list.append(list[i + j*ncol])
         return new_list
     def reorder_handles(self, hl, nc):
         # 원하는 row-major/column-major 변환
@@ -29,11 +30,11 @@ class GroupedBar:
                          legend_title: str = "", output_file: str = None,
                          y_thousands: bool = False, ax=None, show_legend: bool = True,
                          y_min: float = None, y_max: float = None, y_interval: float = None, 
-                         legend_location: str = "upper right"):
+                         legend_location: str = "upper right", legend_type: str = "equal"):
         bar_width = 0.5
         # ax가 제공되지 않으면 새 Figure와 축을 생성
         if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(10, 5))
             
         if z_col:
             pivot_df = self.df.pivot(index=x_col, columns=z_col, values=y_col)
@@ -50,7 +51,10 @@ class GroupedBar:
             print (f"pivot_df.columns: {pivot_df.columns}")
     
             pivot_df = pivot_df.reindex(sorted(pivot_df.columns), axis=1)
-            legend_labels = [f"{legend_title}={label}" for label in pivot_df.columns]
+            if (legend_type == "equal"):
+                legend_labels = [f"{legend_title}={label}" for label in pivot_df.columns]
+            else:
+                legend_labels = [f"{label} {legend_title}" if label != 0 else "No TLC" for label in pivot_df.columns]
             #legend_labels = [f"{legend_title}={i+1}" for i in range(n)]
             if show_legend:
                 # 범례를 상단 중앙에, 테두리 없이 표시
@@ -101,7 +105,7 @@ class GroupedBar:
                         patch.get_x() + patch.get_width() / 2,  # bar 중앙
                         y_max + offset,                         # y_max보다 약간 위쪽에 표시
                         f'{bar_top:.1f}',                        # 실제값 (소수점 없이)
-                        ha='center', va='bottom', fontsize=10, color='black'
+                        ha='center', va='bottom', fontsize=20, color='black'
                     )
         plt.subplots_adjust(top=0.96, bottom=0.18)
         plt.subplots_adjust(left=0.14, right=0.96)

@@ -1,8 +1,14 @@
-
 import pandas as pd
-import json
-import math
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
+import argparse
 
+parser = argparse.ArgumentParser(
+        description="plot line graph"
+    )
+
+parser.add_argument("output_file", help="output erasure coding")
+# 주어진 데이터
 encoding_time_data = [
     # k = 1 데이터
     {'n': 2, 'k': 1, 'Encoding Time': 65},
@@ -200,7 +206,7 @@ encoding_time_data = [
     {'n': 47, 'k': 4, 'Encoding Time': 2901},
     {'n': 48, 'k': 4, 'Encoding Time': 2876},
 
-      # k = 5 데이터
+    # k = 5 데이터
     {'n': 2, 'k': 5, 'Encoding Time': 341},
     {'n': 3, 'k': 5, 'Encoding Time': 362},
     {'n': 4, 'k': 5, 'Encoding Time': 386},
@@ -299,136 +305,67 @@ encoding_time_data = [
     {'n': 48, 'k': 6, 'Encoding Time': 4788},
 ]
 
+df = pd.DataFrame(encoding_time_data)
 
-"""
-    Convert a time string (e.g., '135us', '5s', '2m', '1h') to seconds.
+# -------------------------------------------
+# Throughput(GB/s) = (1,000,000 / EncodingTime(µs)) / 1000 
+#                  = 1000 / EncodingTime(µs)
+# -------------------------------------------
+df['Throughput(GB/s)'] = 1000 / df['Encoding Time'] * 4
 
-    Parameters:
-    - time_str (str): A string representing time with units (us, ms, s, m, h, d).
+# 피벗 테이블: index=n, columns=k, values=Throughput(GB/s)
+pivot_df = df.pivot(index='n', columns='k', values='Throughput(GB/s)')
 
-    Returns:
-    - float: Time in seconds.
-"""
-def get_encoding_latency_usec(df, m, k, replication=False):
-    if (k == 0):
-        return 0
-    if (replication):
-        return 0
-    erasure_coding_latency = df[(df['n'] == m) & (df['k'] == k)]['Encoding Time'].values[0]
-    return int(erasure_coding_latency)
+# 그래프 그리기
+fig, ax = plt.subplots(figsize=(10, 6))
 
-def get_encoding_latency_sec(df, m, k, replication=False):
-    return get_encoding_latency_usec(df, m, k) / 1e6
+markers = ['o', '^', 's', 'D', 'P', '*', 'v', 'x']  # (원하시면 다른 마커 스타일로 변경)
 
-def latency_changed(dict, old, new, number):
-    if (old == new):
-        return 0
-    dict[old] -= number
-    dict[new] += number
-    return number
+for idx, col in enumerate(sorted(pivot_df.columns)):
+    ax.plot(
+        pivot_df.index, 
+        pivot_df[col], 
+        marker=markers[idx % len(markers)], 
+        label=f'k={col}', 
+        linewidth=2
+    )
 
-def KMG_to_bytes(s):
-    if s[-1] == 'K':
-        return float(s[:-1]) * 1000
-    if s[-1] == 'M':
-        return float(s[:-1]) * 1000 * 1000
-    if s[-1] == 'G':
-        return float(s[:-1]) * 1000 * 1000 * 1000
-    return float(s)
+# --------- 축 라벨 설정 --------- 
+ax.set_xlabel('N', fontsize=26, labelpad=10)
+ax.set_ylabel('Throughput (GB/s)', fontsize=26)
+ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=26)
+ax.tick_params(axis='y', labelsize=26)
 
-def convert_to_seconds(time_str):
-    time_units = {
-        'us': 1e-6,  # Microseconds to seconds
-        'ms': 1e-3,  # Milliseconds to seconds
-        's': 1,      # Seconds to seconds
-        'm': 60,     # Minutes to seconds
-        'h': 3600,   # Hours to seconds
-        'd': 86400   # Days to seconds
-    }
-    
-    # Extract numeric value and unit from the string
-    import re
-    match = re.match(r"(\d+\.?\d*)([a-zA-Z]+)", time_str)
-    if not match:
-        raise ValueError("Invalid time string format.")
-    
-    value, unit = match.groups()
-    value = float(value)
-    
-    # Convert to seconds
-    if unit not in time_units:
-        raise ValueError(f"Unsupported time unit: {unit}")
-    
-    return value * time_units[unit]
+# --------- y축 범위 / 간격 설정 ---------
+ax.set_ylim(0, 70)
+ax.yaxis.set_major_locator(MultipleLocator(10))  # 2 간격
 
-def convert_to_microseconds(time_str):
-    return convert_to_seconds(time_str) * 1e6
+# --------- 그리드(수평선) 스타일 ---------
+ax.set_frame_on(True)
+ax.set_axisbelow(True)
+ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
 
-def get_nines(availability):
-    if (availability >= 1.0):
-        return 13 # return max value
-    return -math.log10(1 - availability)
+# 첫 번째/마지막 그리드 라인 숨기기 (옵션)
+ygridlines = ax.get_ygridlines()
+if len(ygridlines) > 2:
+    ygridlines[0].set_visible(False)
+    ygridlines[-1].set_visible(False)
 
-def get_waf_from_op(op):
-    return 1 / 2 * (1 + op) / float(op)
-
-def get_percentile_value(raw_datas, ascending=True):
-    df = pd.DataFrame(list(raw_datas.items()), columns=["value", "interval"])
-    df = df.sort_values(by="value", ascending=ascending).reset_index(drop=True)
-
-    df["cumulative_time"] = df["interval"].cumsum()
-
-    total_time = df["cumulative_time"].iloc[-1]
-
-    percentile_99_time = total_time * 0.99
-    p99 = df[df["cumulative_time"] >= percentile_99_time].iloc[0]["value"]
-
-    percentile_99_9_time = total_time * 0.999
-    p99_9 = df[df["cumulative_time"] >= percentile_99_9_time].iloc[0]["value"]
-
-    percentile_99_99_time = total_time * 0.9999
-    p99_99 = df[df["cumulative_time"] >= percentile_99_99_time].iloc[0]["value"]
-
-    median_time = total_time * 0.5
-    median = df[df["cumulative_time"] >= median_time].iloc[0]["value"]
-
-    average = (df["value"] * df["interval"]).sum() / df["interval"].sum()
-    print (average, median, p99, p99_9, p99_99)
-    return (average, median, p99, p99_9, p99_99)
-
-def parse_input_from_json(file_path):
-    """
-    JSON 파일로부터 데이터를 파싱하여 edges, enclosures, availabilities, redundancies, mttfs, mtrs를 반환합니다.
-    
-    Parameters:
-        file_path (str): JSON 파일의 경로.
-        
-    Returns:
-        tuple: (edges, enclosures, availabilities, redundancies, mttfs, mtrs)
-    """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    # Edges: List of tuples (start, end, weight)
-    edges = []
-    for edge in data.get("edges", []):
-        start = edge.get("start")
-        end = edge.get("end")
-        weight = edge.get("bandwidth")
-        if start is not None and end is not None and weight is not None:
-            edges.append((start, end, weight))
-    
-    # Enclosures: Dict of enclosure name to list of nodes
-    enclosures = data.get("enclosures", {})
-            
-    # MTTFs: Dict of module to MTTF
-    mttfs = data.get("mttf", {})
-    
-    # MTRs: Dict of module to MTR
-    mtrs = data.get("mtr", {})
-    costs = data.get("cost", {})
-    
-    # Redundancies: Dict of module to tuple (M, K)
-    
-    options = data.get("options", {})
-    return edges, enclosures, mttfs, mtrs, costs, options
+# --------- 범례 설정 ---------
+leg = ax.legend(
+    loc='upper right', 
+    frameon=True, 
+    edgecolor='black', 
+    fontsize=26, 
+    ncol=2
+)
+leg.get_frame().set_alpha(1)
+args = parser.parse_args()
+# --------- 여백 조정 (왼쪽에 여유 공간) ---------
+plt.subplots_adjust(left=0.18, bottom=0.18, right=0.96, top=0.96)
+if (args.output_file):
+    plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')
+    #plt.savefig(output_file, bbox_inches='tight')
+    print(f"Plot saved to {args.output_file}")
+else:
+    plt.show()

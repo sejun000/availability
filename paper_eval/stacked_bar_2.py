@@ -53,7 +53,7 @@ class StackedBar:
                              for i in range(len(y_labels))], y_labels)
             
         if title:
-            ax.text(0.5, -0.57, title, transform=ax.transAxes,
+            ax.text(0.5, -0.37, title, transform=ax.transAxes,
                     ha='center', fontsize=26, clip_on=False)
             plt.subplots_adjust(bottom=0.3)
         ax.set_frame_on(True)

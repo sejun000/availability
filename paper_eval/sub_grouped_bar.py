@@ -11,7 +11,19 @@ class SubGroupedBar:
     """
     def __init__(self, df):
         self.df = df
-
+    def reorder_legend(self, list, ncol):
+        """
+        col wise -> row wise
+        """
+        new_list = []
+        for i in range(ncol):
+            for j in range(len(list)//ncol):
+                new_list.append(list[i + j*ncol])
+        return new_list
+    def reorder_handles(self, hl, nc):
+        # 원하는 row-major/column-major 변환
+        new = sum((hl[i::nc] for i in range(nc)), [])
+        return new
     def plot_grouped_bar(self, x_col: str, y_col: str, z_col: str = None,
                      title: str = "", xlabel: str = "", ylabel: str = "",
                      legend_title: str = "", output_file: str = None,
@@ -44,7 +56,11 @@ class SubGroupedBar:
                         ax.get_legend().remove()
                 else:
                     legend_labels = [f"{legend_title}={i+1}" for i in range(n)]
-                    leg = ax.legend(legend_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=26,  ncol=2)
+                    handles, labels = ax.get_legend_handles_labels()
+                    reorder_legend = self.reorder_legend(legend_labels, 2)
+                    reorder_handles = self.reorder_handles(handles, 2)
+                    leg = ax.legend(reorder_handles, reorder_legend, loc=legend_location, frameon=True, edgecolor='black', fontsize=26, ncol=2)
+                    #leg = ax.legend(legend_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=26,  ncol=2)
                     leg.get_frame().set_alpha(1)
                 global_legend = (handles, labels)
             else:
