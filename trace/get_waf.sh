@@ -1,5 +1,5 @@
 #!/bin/bash
-LOGFILE="nvme_counts.log"
+LOGFILE="nvme_counts_0506.log"
 
 while true; do
     echo "========== $(date) ==========" >> "$LOGFILE"

@@ -49,7 +49,7 @@ void LogFIFOCache::evict_one_block(){
     }
     log_buffer[write_ptr].valid = false;
     const int DUMMY_VALUE = 0;
-    //fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", old_key * cache_block_size, cache_block_size, DUMMY_VALUE);
+    fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", old_key * cache_block_size, cache_block_size, DUMMY_VALUE);
     // if 64k range has been evicted, remove all 4k entries in the range
     long start_index_64k = old_key / EVICTED_BLOCK_SIZE * EVICTED_BLOCK_SIZE;
     for (long index_64k = start_index_64k; index_64k < start_index_64k + EVICTED_BLOCK_SIZE; index_64k++) {
@@ -64,6 +64,7 @@ void LogFIFOCache::evict_one_block(){
             size_t diff_c = (write_ptr - pos + N) % N;
             if (diff_b != 0 && diff_c != 0 && diff_b <= diff_c) {
                 // evict the block
+                fprintf(cold_trace_fp, "%ld,%s,%ld,%ld,%ld\n", DUMMY_VALUE, "W", index_64k * cache_block_size, cache_block_size, DUMMY_VALUE);
                 log_buffer[pos].valid = false;
                 mapping.erase(it);
             }

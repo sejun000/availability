@@ -55,16 +55,17 @@ std::unordered_map<int, long long> loadDeviceInfo(const std::string &filename) {
 
 int main(int argc, char* argv[])
 {
-    if (argc < 4) {
+    if (argc < 5) {
         std::cerr << "Usage: " << argv[0]
-                  << " <device_info.csv> <trace_file.csv> <device_list>\n"
-                  << "  ex) " << argv[0] << " device_info.csv trace_file.csv \"0,3,5,6,9\"\n";
+                  << " <device_info.csv> <trace_file.csv> <device_list> <output_trace_file.csv>\n"
+                  << "  ex) " << argv[0] << " device_info.csv trace_file.csv \"0,3,5,6,9\" output_traced_file.csv\n";
         return 1;
     }
 
     std::string deviceInfoFile = argv[1];
     std::string traceFile = argv[2];
     std::string deviceListStr = argv[3];  // 예: "0,3,5,6,9"
+    std::string outputTraceFile = argv[4];
 
     // 1) device_info.csv에서 (devID -> capacity) 맵 읽기
     auto capacities = loadDeviceInfo(deviceInfoFile);
@@ -113,6 +114,20 @@ int main(int argc, char* argv[])
     std::string line;
     long long baseTimestamp = 0; // 첫 행의 timestamp
     bool firstLine = true;
+
+    std::ios::sync_with_stdio(false); 
+    std::cin.tie(nullptr);  
+
+    std::ofstream ofs;                       // ① 파일 스트림
+    std::ostream* out = &std::cout;          // ② 기본은 stdout
+    ofs.open(outputTraceFile, std::ios::out | std::ios::trunc);
+    if (!ofs.is_open()) {
+        std::cerr << "Error: cannot open output file: "
+                  << outputTraceFile << '\n';
+        return 1;
+    }
+    out = &ofs;
+    
     while (std::getline(ifs, line)) {
         if (line.empty() || line[0] == '#') {
             continue;
@@ -133,9 +148,9 @@ int main(int argc, char* argv[])
             firstLine = false;
         }
         // 첫 행의 timestamp로부터 10일을 초과하면 중단 (정렬되어 있다고 가정)
-        if (ts - baseTimestamp > 86400 * 1000ULL * 1000ULL) {
-            break;
-        }
+      //  if (ts - baseTimestamp > 86400 * 1000ULL * 1000ULL) {
+       //     break;
+       // }
         // 해당 devId가 사용자 지정 리스트에 있는지 확인
         if (prefixMap.find(devId) == prefixMap.end()) {
             // 포함되지 않은 device -> 스킵
@@ -147,13 +162,14 @@ int main(int argc, char* argv[])
 
         // 새 로우 출력 (device ID 통합 = 0)
         // 형식: "0,R,newOffset,size,timestamp"
-        std::cout << unifiedDevId << ","
-                  << rw << ","
-                  << newOffset << ","
-                  << size << ","
-                  << ts << "\n";
+        *out << unifiedDevId << ','
+            << rw           << ','
+            << newOffset    << ','
+            << size         << ','
+            << ts           << '\n';
     }
 
     ifs.close();
+    ofs.close();
     return 0;
 }

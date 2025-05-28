@@ -32,7 +32,8 @@ def run_cache_analysis(trace_file, device_size, rw_policy='all', trace_format='c
     #cache_ratios = [0.023255814,0.023809524,0.024390244,0.025,0.051282051,0.052631579,0.054054054,0.055555556,0.085714286,0.088235294,0.090909091,0.09375,0.129032258,0.133333333,0.137931034,0.142857143]
     #cache_ratios = [0.0116, 0.024, 0.038, 0.054] # paper
     #cache_ratios = [0.070, 0.090]
-    cache_ratios = [0.0116, 0.024, 0.038, 0.054, 0.070, 0.090] # paper
+    #cache_ratios = [0.0116, 0.024, 0.038, 0.054, 0.070, 0.090] # paper
+    cache_ratios = [0.038, 0.054]
     #cache_ratios = [0.075, 0.085, 0.095, 0.105]
     #cache_ratios = [0.05618, 0.075, 0.085, 0.095, 0.105]
     #cache_ratios = [0.105]
@@ -59,8 +60,14 @@ if __name__ == "__main__":
     parser.add_argument("--trace_format", type=str, choices=['csv', 'blktrace'], default='csv', help="Trace format: csv (default) or blktrace")
     #parser.add_argument("--device_size", type=int, default=130599218053120, help="Device size in bytes")
     #parser.add_argument("--device_size", type=int, default=17491254312960, help="Device size in bytes")
-    parser.add_argument("--device_size", type=int, default=21083994456064, help="Device size in bytes")
+    #parser.add_argument("--device_size", type=int, default=21083994456064, help="Device size in bytes")
+    #parser.add_argument("--device_size", type=int, default=21083994456064, help="Device size in bytes")
     #parser.add_argument("--device_size", type=int, default=512_000_000_000, help="Device size in bytes")
+    #parser.add_argument("--device_size", type=int, default=8_377_333_710_848, help="Device size in bytes")
+    #parser.add_argument("--device_size", type=int, default=5003636899840, help="Device size in bytes")
+    parser.add_argument("--device_size", type=int, default=137010594691, help="Device size in bytes")
+    
+    
 
     args = parser.parse_args()
     #estimated_device_size = estimate_device_size(args.trace_file, args.trace_format)

@@ -1,134 +1,105 @@
 #!/usr/bin/env python3
+"""
+plot_waf_multi.py – 여러 trace의 WAF(ΔNAND/ΔHOST) 꺾은선 그래프
+
+입력 CSV 형식
+  col0(무시), col1 = NAND-write bytes (누적), col2 = HOST-write bytes (누적)
+
+x-축 : 누적 HOST-write (bytes)
+y-축 : ΔNAND / ΔHOST  (각 행과 직전 행 차분)
+
+사용 예
+  python plot_waf_multi.py \
+         --csv raw.csv,tier.csv,hybrid.csv \
+         --label Raw,Tiering,Hybrid \
+         -o waf.pdf
+"""
+
 import argparse
-import datetime
-from datetime import timedelta
-#import matplotlib
-#matplotlib.use('TkAgg')
+import itertools
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import pandas as pd
 
-def parse_timestamp(header_line):
-    """
-    헤더 라인 예:
-    "========== Sat 08 Mar 2025 08:30:23 PM KST =========="
-    앞뒤의 '='를 제거하고, 마지막 시간대 토큰(KST)은 무시한 후,
-    "Sat 08 Mar 2025 08:30:23 PM" 형식으로 파싱.
-    """
-    ts_str = header_line.strip("= \n")
-    parts = ts_str.split()
-    if len(parts) >= 7:
-        ts_str = " ".join(parts[:-1])  # 마지막 토큰 제거
-    return datetime.datetime.strptime(ts_str, "%a %d %b %Y %I:%M:%S %p")
 
-def load_trace(filename):
-    """
-    파일을 읽어 (timestamp, nand_write_count, write_count) 튜플의 리스트를 반환합니다.
-    각 블록은 3줄(헤더, nand_write_count, write_count)로 구성되어 있다고 가정합니다.
-    """
-    blocks = []
-    with open(filename, 'r') as f:
-        lines = f.readlines()
+def load_waf(path: Path):
+    """CSV 한 개 → (host array, waf array)"""
+    df = pd.read_csv(path, header=None, names=["_", "nand", "host"])
+    dn = df["nand"].diff()
+    dh = df["host"].diff()
+    waf = dn / dh
+    # 첫 행 NaN 제거
+    return df["host"].iloc[1:].to_numpy(), waf.iloc[1:].to_numpy()
 
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith("=========="):
-            try:
-                timestamp = parse_timestamp(line)
-                nand_line = lines[i+1].strip()
-                write_line = lines[i+2].strip()
-                nand_val = int(nand_line.split(':')[1].strip())
-                write_val = int(write_line.split(':')[1].strip())
-                blocks.append((timestamp, nand_val, write_val))
-                i += 3
-            except Exception as e:
-                print("Error parsing block at line", i, e)
-                i += 1
-        else:
-            i += 1
-    return blocks
-
-def compute_waf(blocks):
-    """
-    인접한 블록 쌍에 대해 WAF 값을 계산합니다.
-    WAF = (nand_write_count(t+1) - nand_write_count(t)) / (write_count(t+1) - write_count(t))
-    각 구간의 (시작시간, 끝시간, WAF)를 튜플로 반환합니다.
-    """
-    intervals = []
-    for i in range(len(blocks) - 1):
-        t1, nand1, write1 = blocks[i]
-        t2, nand2, write2 = blocks[i+1]
-        delta_nand = nand2 - nand1
-        delta_write = write2 - write1
-        if delta_write == 0:
-            waf = float('inf')
-        else:
-            waf = delta_nand / delta_write
-        intervals.append((t1, t2, waf))
-    return intervals
-
-def plot_waf(intervals):
-    """
-    시간에 따른 WAF 그래프를 그립니다.
-    x축: 구간의 중간 시각, y축: WAF 값.
-    """
-    x = []
-    y = []
-    for t1, t2, waf in intervals:
-        midpoint = t1 + (t2 - t1)/2
-        x.append(midpoint)
-        y.append(waf)
-    plt.figure(figsize=(10,5))
-    plt.plot(x, y, marker='o')
-    plt.xlabel("Time")
-    plt.ylabel("WAF")
-    plt.title("WAF over time")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Calculate WAF from trace file. "
-                    "Use --from_date (YYYY/MM/DD) and --from_time (HH:MM) and --to_date (YYYY/MM/DD) and --to_time (HH:MM) "
-                    "to filter data for a specific time range. If not provided, the entire trace is plotted."
+    ap = argparse.ArgumentParser(
+        description="Plot WAF vs host-write for multiple traces"
     )
-    parser.add_argument("--from_date", help="Start date in format YYYY/MM/DD")
-    parser.add_argument("--from_time", help="Start time in format HH:MM")
-    parser.add_argument("--to_date", help="End date in format YYYY/MM/DD")
-    parser.add_argument("--to_time", help="End time in format HH:MM")
-    parser.add_argument("--file", required=True, help="Path to the trace file")
-    args = parser.parse_args()
+    ap.add_argument(
+        "--csv",
+        required=True,
+        help="comma-separated CSV file list (e.g. a.csv,b.csv,c.csv)",
+    )
+    ap.add_argument(
+        "--label",
+        default=None,
+        help="comma-separated label list (default: file names)",
+    )
+    ap.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="PDF/PNG file to save (omit to show on screen)",
+    )
+    args = ap.parse_args()
 
-    blocks = load_trace(args.file)
-    if not blocks:
-        print("No trace blocks found in the file.")
-        return
+    paths = [Path(p.strip()) for p in args.csv.split(",") if p.strip()]
+    if not paths:
+        ap.error("no CSV files given")
 
-    # 네 개의 인자가 모두 제공된 경우: 지정된 시간 범위 내의 데이터만 필터링
-    if args.from_date and args.from_time and args.to_date and args.to_time:
-        try:
-            filter_start = datetime.datetime.strptime(f"{args.from_date} {args.from_time}", "%Y/%m/%d %H:%M")
-            filter_end = datetime.datetime.strptime(f"{args.to_date} {args.to_time}", "%Y/%m/%d %H:%M")
-        except Exception as e:
-            print("Invalid date/time format:", e)
-            return
-        filtered_blocks = [b for b in blocks if filter_start <= b[0] < filter_end]
-        if len(filtered_blocks) < 2:
-            print("Not enough data points in the given time range.")
-            return
-        intervals = compute_waf(filtered_blocks)
-        print("Calculated WAF values for the given time range:")
-        for t1, t2, waf in intervals:
-            print(f"{t1.strftime('%Y-%m-%d %H:%M:%S')} -> {t2.strftime('%Y-%m-%d %H:%M:%S')}: WAF = {waf:.4f}")
-        plot_waf(intervals)
+    labels = (
+        [s.strip() for s in args.label.split(",")]
+        if args.label
+        else [p.stem for p in paths]
+    )
+    # label 개수가 파일보다 적으면 뒤쪽은 파일 이름으로 채움
+    if len(labels) < len(paths):
+        labels += [p.stem for p in paths[len(labels) :]]
+
+    # ─── plot ───────────────────────────────────────────────────────────────
+    plt.figure(figsize=(6.5, 4))
+    line_cycler = itertools.cycle(
+        [
+            {"linestyle": "-"},
+            {"linestyle": "--"},
+            {"linestyle": "-."},
+            {"linestyle": ":"},
+        ]
+    )
+
+    for path, lab in zip(paths, labels):
+        if not path.is_file():
+            print(f"[warn] skip: {path} (not found)")
+            continue
+        x, y = load_waf(path)
+        plt.plot(x, y, label=lab, **next(line_cycler))
+
+    plt.xlabel("Host-write bytes")
+    plt.ylabel("WAF  (ΔNAND / ΔHOST)")
+    plt.title("Write-Amplification vs Host-write")
+    plt.grid(True, linewidth=0.6, linestyle=":")
+    plt.legend(frameon=False)
+    plt.tight_layout()
+
+    if args.output:
+        fmt = "pdf" if args.output.lower().endswith(".pdf") else None
+        plt.savefig(args.output, dpi=300, format=fmt)
+        print(f"saved → {args.output}")
     else:
-        # 인자가 없으면 전체 trace의 데이터를 사용하여 그래프를 그림
-        intervals = compute_waf(blocks)
-        if not intervals:
-            print("Not enough data points to compute WAF.")
-            return
-        print("Plotting WAF over the entire trace...")
-        plot_waf(intervals)
+        plt.show()
+
 
 if __name__ == "__main__":
     main()
