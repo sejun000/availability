@@ -6,15 +6,13 @@ current_allocated_ssd_group_index = 0
 current_allocated_ssd_index = 0
 
 class SSDRedundancyScheme:
-    def __init__(self, write_bw, read_bw, read_latency, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_read_latency, cached_mttf, m, k, l, cached_m, cached_k, cached_l, network_m, network_k, network_l, cached_network_m, cached_network_k, cached_network_l, cached_ssds, total_ssds, inter_replicas, intra_replicas):
+    def __init__(self, write_bw, read_bw, mttf, cached_write_ratio, cached_write_bw, cached_read_bw, cached_mttf, m, k, l, cached_m, cached_k, cached_l, network_m, network_k, network_l, cached_network_m, cached_network_k, cached_network_l, cached_ssds, total_ssds, inter_replicas, intra_replicas):
         self.write_bw = write_bw
         self.read_bw = read_bw
-        self.read_latency = read_latency
         self.mttf = mttf
         self.cached_write_ratio = cached_write_ratio
         self.cached_write_bw = cached_write_bw
         self.cached_read_bw = cached_read_bw
-        self.cached_read_latency = cached_read_latency
         self.cached_mttf = cached_mttf
         self.m = m
         self.k = k
@@ -63,8 +61,6 @@ class SSDRedundancyScheme:
         return self.cached_read_bw if cached else self.read_bw
     def get_write_bw(self, cached):
         return self.cached_write_bw if cached else self.write_bw
-    def get_read_latency(self, cached):
-        return self.cached_read_latency if cached else self.read_latency
     def get_mttf(self, cached):
         return self.cached_mttf if cached else self.mttf
     def get_m(self, cached):

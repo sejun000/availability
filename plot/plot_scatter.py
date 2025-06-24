@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--y_interval", default=None, help="Comma-separated y-axis tick intervals for each subplot (e.g., '0.05,0.05,0.05')")
     parser.add_argument("--titles", default="", help="Titles for the entire figure")
 
-    parser.add_argument("--filtered_expr", default=None, help="Global filter expression for data (e.g., 'm > 5')")
+    parser.add_argument("--filter_expr", default=None, help="Global filter expression for data (e.g., 'm > 5')")
 
     args = parser.parse_args()
 
@@ -31,22 +31,37 @@ def main():
     print("Parsed DataFrame:")
     print(df.head())
 
-    if args.filtered_expr:
+     # 1) DataFrame.query (column-vector 방식)
+    try:
+        df = df.query(args.filter_expr, engine="python")
+    except Exception as e_query:
+        # 2) df.eval → Boolean Series
         try:
-            print("Number of rows after filtering:", df.shape[0])
-            df = df.query(args.filtered_expr)
-            print("DataFrame after global filtering:")
-            print("Number of rows after filtering:", df.shape[0])
-            print(df.head())
-        except Exception as e:
-            print(f"Error applying global filter expression '{args.filtered_expr}': {e}")
-    print(df)
+            mask = df.eval(args.filter_expr, engine="python")
+            if mask.dtype != bool:
+                raise ValueError("filter expression did not yield a Boolean mask")
+            df = df[mask]
+        except Exception as e_eval:
+            # 3) 마지막 수단: 행별 eval
+            try:
+                df = df.apply(lambda r: bool(eval(args.filter_expr, {}, r.to_dict())), axis=1)
+            except Exception as e_row:
+                msg = (
+                    f"Error applying filter_expr '{args.filter_expr}':\n"
+                    f" • query()  → {e_query}\n"
+                    f" • eval()   → {e_eval}\n"
+                    f" • row eval → {e_row}"
+                )
+                raise RuntimeError(msg) from e_row
     # x_expr 평가
     try:
         df["x"] = df.eval(args.x_expr)
     except Exception as e:
-        print(f"Error evaluating x_expr '{args.x_expr}': {e}")
-        df["x"] = df[args.x_expr]
+        try:
+            df["x"] = df.apply(lambda r: eval(args.x_expr, {}, r.to_dict()), axis=1)
+        except Exception as e:
+            print(f"Error evaluating x_expr '{args.x_expr}': {e}")
+            df["x"] = df[args.x_expr]
 
     # z_expr 평가 (옵션)
     try:
@@ -72,10 +87,13 @@ def main():
     for i, expr in enumerate(y_expr_list):
         col_name = f"y_{i}"
         try:
-            df[col_name] = df.eval(expr)
+            df[col_name] = df.eval(expr, engine="python")
         except Exception as e:
-            print(f"Error evaluating y_expr '{expr}': {e}")
-            df[col_name] = df[expr]
+            try:
+                df[col_name] = df.apply(lambda r: eval(expr, {}, r.to_dict()), axis=1)
+            except Exception as e:
+                print(f"Error evaluating y_expr '{expr}': {e}")
+                df[col_name] = df[expr]
     y_cols = [f"y_{i}" for i in range(len(y_expr_list))]
     n_y = len(y_cols)
 
@@ -87,7 +105,7 @@ def main():
     elif n_y == 3:
         nrows, ncols = 1, 3
     elif n_y == 4:
-        nrows, ncols = 1, 4
+        nrows, ncols = 2, 2
     else:
         print("Only support up to 4 y expressions.")
         return
@@ -148,8 +166,8 @@ def main():
                 ax.scatter(subset["x"], subset[y_col], marker=marker_styles[groups.index(group) % len(marker_styles)], s=80, color=color_map[group], alpha=0.8)
 
             #ax.set_xlabel(args.x_label if args.x_label else args.x_expr, fontsize=25)
-            ax.set_ylabel(y_label_list[idx], fontsize=25)
-            ax.tick_params(axis='both', labelsize=23)
+            ax.set_ylabel(y_label_list[idx], fontsize=15)
+            ax.tick_params(axis='both', labelsize=15)
             # x축을 정수형으로 표시
             ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
             if y_min_list[idx] is not None or y_max_list[idx] is not None:
@@ -159,12 +177,12 @@ def main():
             if y_interval_list[idx] is not None:
                 ax.yaxis.set_major_locator(MultipleLocator(y_interval_list[idx]))
             ax.xaxis.set_major_locator(MultipleLocator(5))
-            ax.set_xlim(75, 100)
+            ax.set_xlim(85, 100)
             fig.canvas.draw()
 
             ymin, ymax = ax.get_ylim()
-            ax.text(0.5, -0.44, title_list[idx], transform=ax.transAxes,
-                    ha='center', fontsize=26, clip_on=False)
+            ax.text(0.5, -0.24, title_list[idx], transform=ax.transAxes,
+                    ha='center', fontsize=15, clip_on=False)
             ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
             # get_ygridlines()로 모든 가로 grid line 순회
             for line in ax.get_ygridlines():
@@ -184,18 +202,19 @@ def main():
     #ax.yaxis.set_major_locator(MultipleLocator(args.y_interval))
     # global legend를 상단 중앙에 표시 (z_expr가 제공된 경우)
             # y축 현재 범위 가져오기
-    fig.text(0.5, 0.10, args.x_label if args.x_label else args.x_expr, ha='center', fontsize=26)
+    fig.text(0.5, 0.05, args.x_label if args.x_label else args.x_expr, ha='center', fontsize=15)
     fig.legend(global_handles, global_labels, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-                ncol=len(global_labels), frameon=False, fontsize=26)
+                ncol=len(global_labels), frameon=False, fontsize=15)
     
     # 전체 여백 조정 (상단에 여백 확보)
     #plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.subplots_adjust(top=0.82, bottom=0.25)
+    plt.subplots_adjust(top=0.88, bottom=0.20)
     plt.subplots_adjust(left=0.07, right=0.93)
     plt.subplots_adjust(hspace=0.35, wspace=0.34)
     if (args.output_file):
         df.to_csv(args.output_file+".txt", sep='\t', index=False)
-        plt.savefig(args.output_file, format="pdf", dpi=600, bbox_inches='tight')
+        plt.savefig(args.output_file, format="png", dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {args.output_file}")
     else:
         plt.show()
 

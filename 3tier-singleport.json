@@ -40,16 +40,12 @@
         {"start": "host_module3", "end": "backend_module2", "bandwidth": "12.5G"},
         {"start": "host_module3", "end": "backend_module3", "bandwidth": "12.5G"},
         {"start": "backend_module0", "end": "io_module0", "bandwidth": "12.5G"},
-        {"start": "backend_module1", "end": "io_module1", "bandwidth": "12.5G"},
-        {"start": "backend_module0", "end": "io_module1", "bandwidth": "12.5G"},
         {"start": "backend_module1", "end": "io_module0", "bandwidth": "12.5G"},
         {"start": "backend_module2", "end": "io_module0", "bandwidth": "12.5G"},
-        {"start": "backend_module3", "end": "io_module1", "bandwidth": "12.5G"},
-        {"start": "backend_module2", "end": "io_module1", "bandwidth": "12.5G"},
         {"start": "backend_module3", "end": "io_module0", "bandwidth": "12.5G"}
     ],
     "enclosures": {
-        "NVMeEnclosure0": ["io_module0", "io_module1"],
+        "NVMeEnclosure0": ["io_module0"],
         "ControllerBox0": ["host_module0", "host_module1", "backend_module0", "backend_module1"],
         "ControllerBox1": ["host_module2", "host_module3", "backend_module2", "backend_module3"]
     },

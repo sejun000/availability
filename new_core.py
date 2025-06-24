@@ -1,4 +1,3 @@
-import random
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import encoding_time_data
@@ -7,6 +6,9 @@ from utils import parse_input_from_json
 #from static_analysis import test_static_analyze_ssd_only
 from graph_structure import GraphStructure
 import simulation as sim
+import logging
+import csv
+from pathlib import Path
 
 import argparse
 
@@ -28,7 +30,6 @@ def parse_arguments():
     parser.add_argument('--inter_replicas', type=int, default=0, help='Number of network copys')
     parser.add_argument('--intra_replicas', type=int, default=0, help='Number of local copys, cache ssds')
     parser.add_argument('--cached_write_ratio', type=float, default=0, help='Cached write ratio relative to total write')
-    parser.add_argument('--cached_read_ratio', type=float, default=0.8, help='Cached read ratio relative to total write')
     parser.add_argument('--write_through', action='store_true', help='Flag to indicate if write through is used')
     parser.add_argument('--network_m', type=int, default=8, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
@@ -37,20 +38,22 @@ def parse_arguments():
     parser.add_argument('--qlc', action='store_true', help='Flag to indicate if QLC SSDs are used. default is TLC')
     parser.add_argument('--simulation', action='store_true', help='Flag to indicate if simulation is being run')
     parser.add_argument('--dwpd', type=float, default=1, help='DWPD (Drive writes per day) of SSDs. Writes amount for cached tier if cached tier is used')
-    parser.add_argument('--tbwpd', type=float, default=4.5, help='TB writes per day of SSDs. Writes amount for cached tier if cached tier is used')
-    parser.add_argument('--use_tbwpd', action='store_true', help='Flag to indicate if TB writes per day is used instead of DWPD')
+    parser.add_argument('--single_port_ssd', action='store_true', help='Flag to indicate if single port SSDs are used. default is dual port SSDs')
+    parser.add_argument('--active_active', action='store_true', help='Flag to indicate if active-active mode is used. default is active-passive')
+
     parser.add_argument('--guarnanteed_years', type=int, default=5, help='Guaranteed years of SSDs')
     parser.add_argument('--config_file', type=str, default='2tier.json', help='Graph structure file path')
     parser.add_argument('--output_file', type=str, default='results.txt', help='Output file path to save results')
     parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
     parser.add_argument('--op_ratio', type=float, default=0.07, help='Over-provisioning ratio')
     parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
-    parser.add_argument('--nprocs', type=int, default=40, help='Number of processes to use for simulation')
+    parser.add_argument('--nprocs', type=int, default=20, help='Number of processes to use for simulation')
     parser.add_argument('--box_mttf', type=float, default=0, help='enclosure_mttf')
-    parser.add_argument('--io_module_mttf', type=float, default=0, help='io_module_mttf')
-    parser.add_argument('--rebuild_bw_ratio', type=float, default=0, help='Rebuild speed ratio')
-    parser.add_argument('--target_performance', type=float, default=0.5, help='Target performance')
-    args = parser.parse_args()
+    parser.add_argument('--io_module_mttr', type=float, default=0, help='io_module_mttr')
+    parser.add_argument('--rebuild_bw_ratio', type=float, default=0.2, help='Rebuild speed ratio')
+    parser.add_argument('--no_result', action='store_true', help='Do not write result to output_file, default is writing to result file')
+    parser.add_argument('--target_perf_ratio', type=float, default=0.8, help='Target performance ratio for simulation')
+    args = parser.parse_args()  
     return args
 
 args = parse_arguments()
@@ -73,14 +76,12 @@ inter_replicas = args.inter_replicas
 intra_replicas = args.intra_replicas
 
 cached_write_ratio = args.cached_write_ratio
-cached_read_ratio = args.cached_read_ratio
 capacity = args.capacity
 qlc = args.qlc
 simulation = args.simulation
 dwpd = args.dwpd
 output_file = args.output_file
-tbwpd = args.tbwpd
-use_tbwpd = args.use_tbwpd
+
 simulation = args.simulation
 
 edges, enclosures, mttfs, mtrs, costs, options = parse_input_from_json(args.config_file)
@@ -122,7 +123,6 @@ if (args.write_through):
 
 if (cached_ssds == 0 and cached_write_ratio != 0):
     cached_write_ratio = 0
-    cached_read_ratio = 0
 
 if (cached_ssds == 0 and cached_m + cached_k + cached_l > 0):
     raise ValueError('Do not use cached_m, cached_k, cached_l without cached_ssds')
@@ -131,7 +131,7 @@ if (inter_replicas > 1):
     network_m = 1
     network_k = inter_replicas - 1
     network_l = 0
-    print ("input network_m and cnetwork_k are ignored, and calculated as 1 and inter_replicas - 1")
+    print ("input network_m and network_k are ignored, and calculated as 1 and inter_replicas - 1")
 
 if (cached_ssds > 0):
     if (intra_replicas > 1):
@@ -175,8 +175,7 @@ params_and_results['guaranteed_years'] = guaranteed_years
 params_and_results['dwpd_limit'] = dwpd_limit
 params_and_results['op_ratio'] = op_ratio
 params_and_results['waf_ratio'] = waf_ratio
-params_and_results['use_tbwpd'] = use_tbwpd
-params_and_results['tbwpd'] = tbwpd
+
 params_and_results['simulation'] = simulation
 params_and_results['ssd_read_bw'] = read_bw
 params_and_results['ssd_write_bw'] = write_bw
@@ -185,42 +184,87 @@ if (args.qlc_cache == True):
     params_and_results['cached_dwpd_limit'] = qlc_dwpd
     params_and_results['cached_ssd_read_bw'] = qlc_read_bw
     params_and_results['cached_ssd_write_bw'] = qlc_write_bw
-    params_and_results['cached_ssd_read_latency'] = options['qlc_read_latency']
 else:
     params_and_results['qlc_cache'] = False
     params_and_results['cached_dwpd_limit'] = tlc_dwpd
     params_and_results['cached_ssd_read_bw'] = tlc_read_bw
     params_and_results['cached_ssd_write_bw'] = tlc_write_bw
-    params_and_results['cached_ssd_read_latency'] = options['tlc_read_latency']
 
-params_and_results['cached_read_ratio'] = cached_read_ratio
 params_and_results['write_through'] = args.write_through
 params_and_results['config_file'] = args.config_file
 params_and_results['nprocs']= args.nprocs
 params_and_results['box_mttf'] = args.box_mttf
-params_and_results['io_module_mttf'] = args.io_module_mttf
-params_and_results['target_performance'] = args.target_performance
+params_and_results['io_module_mttr'] = args.io_module_mttr
+params_and_results['active_active'] = args.active_active
+params_and_results['single_port_ssd'] = args.single_port_ssd
 params_and_results['rebuild_bw_ratio'] = args.rebuild_bw_ratio
+params_and_results['target_perf_ratio'] = args.target_perf_ratio
 
 df = pd.DataFrame(encoding_time_data)
 
 params_and_results['df'] = df
 
+logging.basicConfig(
+    level=logging.INFO,                      # default verbosity
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 
-def output_params_and_results():
+# ---------------------------------------------------------------------------
+def input_params_and_results() -> None:
+    """
+    Pretty-print the current configuration and results (excluding `df`).
+    """
+    logging.info("Current parameters & Config:")
+    for key, val in params_and_results.items():
+        if key != "df":
+            logging.info("  %-15s : %s", key, val)
+    logging.info("-" * 40)
+
+
+def output_params_and_results() -> None:
+    """
+    Append `params_and_results` to a CSV file.
+
+    * If the file is empty, write a header line with the keys.
+    * If the file already has a header, assert that every key exists,
+      then write values in that exact column order.
+    """
     global params_and_results, output_file
-    del params_and_results["df"]
-    with open(output_file, 'a') as f:
-        for key in params_and_results:
-            f.write(f'{key} | {params_and_results[key]} | ')
-        f.write('\n')
+
+    # Drop transient fields that should not be persisted
+    params_and_results.pop("df", None)
+
+    path = Path(output_file)
+    file_is_empty = (not path.exists()) or path.stat().st_size == 0
+
+    # Create header if needed
+    if file_is_empty:
+        header = list(params_and_results.keys())
+        logging.info("Creating new CSV with header: %s", header)
+        with path.open("w", newline="") as f:
+            csv.writer(f).writerow(header)
+    else:
+        # Read existing header and validate keys
+        with path.open("r", newline="") as f:
+            header = next(csv.reader(f))
+        missing = [k for k in params_and_results if k not in header]
+        if missing:
+            raise AssertionError(
+                f"CSV header missing expected field(s): {missing}"
+            )
+
+    # Append a row matching the header order
+    row = [params_and_results[k] for k in header]
+    with path.open("a", newline="") as f:
+        csv.writer(f).writerow(row)
+    logging.info("Appended new row to %s", output_file)
 
 if __name__ == "__main__":
     if (simulation):
-        #num_simulations = 20000
         num_simulations = 80000
+        input_params_and_results()
         sim.monte_carlo_simulation(params_and_results, hardware_graph, num_simulations, options, costs)
         print (edges, enclosures, mttfs, mtrs)
-    
-        #test_static_analyze_ssd_only(guaranteed_years, use_tbwpd, tbwpd, dwpd_limit, capacity, dwpd, params_and_results, m, k, n, df, write_bw)
-    output_params_and_results()
+        if (not args.no_result):
+            output_params_and_results()

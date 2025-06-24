@@ -2,6 +2,7 @@
 import pandas as pd
 import json
 import math
+import sys
 
 encoding_time_data = [
     # k = 1 데이터
@@ -432,3 +433,12 @@ def parse_input_from_json(file_path):
     
     options = data.get("options", {})
     return edges, enclosures, mttfs, mtrs, costs, options
+
+def progress_bar(i, total, bar_len=40):
+    frac   = i / total
+    filled = int(bar_len * frac)
+    bar    = "█" * filled + "-" * (bar_len - filled)
+    pct    = int(frac * 100)
+    endchar = "\n" if i == total else "\r"
+    sys.stdout.write(f"[{bar}] {pct:3d}% ({i}/{total}){endchar}")
+    sys.stdout.flush()

@@ -23,13 +23,11 @@
         "erasure_coding_cores": 4
     },
     "edges": [
-        {"start": "switch0", "end": "io_module0", "bandwidth": "12.5G"},
-        {"start": "switch0", "end": "io_module1", "bandwidth": "12.5G"},
-        {"start": "switch1", "end": "io_module0", "bandwidth": "12.5G"},
-        {"start": "switch1", "end": "io_module1", "bandwidth": "12.5G"}
+        {"start": "switch0", "end": "io_module0", "bandwidth": "25G"},
+        {"start": "switch1", "end": "io_module0", "bandwidth": "25G"}
     ],
     "enclosures": {
-        "NVMeEnclosure0": ["io_module0", "io_module1"]
+        "NVMeEnclosure0": ["io_module0"]
     },
     "mttf": {
         "switch": 350400,
@@ -49,7 +47,7 @@
         "switch": 24,
         "io_module": 0.25,
         "ssd": 4,
-        "NVMeEnclosure": 12,
-        "ControllerBox": 12
+        "NVMeEnclosure": 24,
+        "ControllerBox": 24
     }
 }

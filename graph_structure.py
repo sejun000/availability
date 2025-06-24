@@ -44,13 +44,14 @@ class GraphStructure:
             return float(weight[:-1]) * 1_000_000
         else:
             raise ValueError("Unknown weight format")
-    def get_module_degraded(self, end_module):
+    def get_module_degraded(self, end_module, active_active):
         cnt = 0
         for node in self.G.nodes():
             if end_module in node:
                 cnt += 1
-        if cnt == 1:
+        if cnt == 1 and active_active:
             return True
+        return False
     def calculate_max_flow(self, start_node_module, leaf_node_module):
         self.add_virtual_nodes(start_node_module, leaf_node_module)
         flow_value, flow_dict = nx.maximum_flow(self.G, 'virtual_source', 'virtual_sink',  flow_func=edmonds_karp)
