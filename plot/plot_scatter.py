@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
-from parser import Parser  # 데이터 파싱용 (사용자 정의)
+from csv_parser import Parser  # 데이터 파싱용 (사용자 정의)
 import matplotlib.ticker as ticker
 import numpy as np
 

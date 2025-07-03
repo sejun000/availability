@@ -33,21 +33,18 @@
         "switch": 350400,
         "io_module": 3096,
         "ssd": 0,
-        "NVMeEnclosure": 7277969952,
-        "ControllerBox": 7277969952 
+        "NVMeEnclosure": 7277969952
     },
     "cost": {
         "switch": 21753,
         "io_module": 3409,
         "ssd": 0,
-        "NVMeEnclosure": 1166,
-        "ControllerBox": 1166
+        "NVMeEnclosure": 1166
     },
     "mtr": {
         "switch": 24,
         "io_module": 0.25,
         "ssd": 4,
-        "NVMeEnclosure": 24,
-        "ControllerBox": 24
+        "NVMeEnclosure": 12
     }
 }
