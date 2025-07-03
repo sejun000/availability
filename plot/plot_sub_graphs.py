@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
-from parser import Parser
+from csv_parser import Parser
 from stacked_bar_2 import StackedBar
 
 def reorder_handles(hl, nc):
@@ -29,7 +29,7 @@ def main():
                         help="Comma-separated expressions for y values (e.g., 'initial_cost, repair_cost')")
     parser.add_argument("--y_label", required=True, 
                         help="Comma-separated labels for y values (e.g., 'Initial, Repair')")
-    parser.add_argument("--xlabel", default=None, help="X-axis label")
+    parser.add_argument("--x_label", default=None, help="X-axis label")
     parser.add_argument("--y_total_label", default=None, help="Y-axis label")
     parser.add_argument("--legend", default="", help="Prefix for legend labels (e.g., 'Parity')")
     parser.add_argument("--filter_expr1", default=None, help="Filter expression for subplot 1")
@@ -77,7 +77,7 @@ def main():
             df[col_name] = df[expr]
     y_cols = [f"y_{i}" for i in range(len(y_expr_list))]
     
-    xlabel = args.xlabel if args.xlabel else args.x_expr
+    xlabel = args.x_label if args.x_label else args.x_expr
     ylabel = args.y_total_label if args.y_total_label else ""
     
     # 2x2 subplot 생성

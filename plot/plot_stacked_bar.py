@@ -1,5 +1,5 @@
 import argparse
-from parser import Parser
+from csv_parser import Parser
 from stacked_bar import StackedBar
 
 def main():
@@ -21,8 +21,14 @@ def main():
     args = ap.parse_args()
 
     df = Parser().parse_file_to_dataframe(args.input_file)
-    
-    df["x"] = df.eval(args.x_expr)
+    try:
+        df["x"] = df.eval(args.x_expr, engine="python")
+    except Exception as e:
+        try:
+            df["x"] = df.apply(lambda r: eval(args.x_expr, {}, r.to_dict()), axis=1)
+        except Exception as e:
+            print(f"Error evaluating x_expr '{args.x_expr}': {e}")
+            df["x"] = df[args.x_expr]
 
     y_expr_list = [e.strip() for e in args.y_exprs.split(",") if e.strip()]
     if args.legend:
@@ -48,10 +54,15 @@ def main():
             print (f"Evaluating expression: {expr} -> {lab}")
             df[lab] = df.eval(expr, engine="python")
         except Exception as e:
-            print("\n[ERROR] Cannot evaluate:", expr)
-            print("Reason :", e)
-            print("Columns:", list(df.columns))
-            raise                      # 재-raise 해서 스택 확인
+            try:
+                df[lab] = df.apply(lambda r: eval(expr, {}, r.to_dict()), axis=1)
+            except Exception as e:
+                print(f"Error evaluating y_expr '{expr}': {e}")
+                print("\n[ERROR] Cannot evaluate:", expr)
+                print("Reason :", e)
+                print("Columns:", list(df.columns))
+                df[lab] = df[expr]
+                raise                      # 재-raise 해서 스택 확인
         y_cols.append(lab)
 
     ax = StackedBar(df).plot_stacked_bar(

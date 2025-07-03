@@ -1,6 +1,6 @@
 import argparse
 import pandas as pd
-from parser import Parser
+from csv_parser import Parser
 from grouped_bar import GroupedBar
 
 def main():

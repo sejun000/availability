@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 import numpy as np
-from parser import Parser
+from csv_parser import Parser
 from sub_grouped_bar import SubGroupedBar
 import matplotlib.pyplot as plt
 import matplotlib as mpl

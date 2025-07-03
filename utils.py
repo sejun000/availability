@@ -440,5 +440,5 @@ def progress_bar(i, total, bar_len=40):
     bar    = "█" * filled + "-" * (bar_len - filled)
     pct    = int(frac * 100)
     endchar = "\n" if i == total else "\r"
-    sys.stdout.write(f"[{bar}] {pct:3d}% ({i}/{total}){endchar}")
+    sys.stdout.write(f"[{bar}] {pct:3d}% completed {endchar}")
     sys.stdout.flush()

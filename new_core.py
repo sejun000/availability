@@ -30,7 +30,6 @@ def parse_arguments():
     parser.add_argument('--inter_replicas', type=int, default=0, help='Number of network copys')
     parser.add_argument('--intra_replicas', type=int, default=0, help='Number of local copys, cache ssds')
     parser.add_argument('--cached_write_ratio', type=float, default=0, help='Cached write ratio relative to total write')
-    parser.add_argument('--write_through', action='store_true', help='Flag to indicate if write through is used')
     parser.add_argument('--network_m', type=int, default=8, help='Number of Data chunks in network')
     parser.add_argument('--network_k', type=int, default=0, help='Number of Parity chunks in network')
     parser.add_argument('--network_l', type=int, default=0, help='Number of Remaining chunks in network')
@@ -38,21 +37,20 @@ def parse_arguments():
     parser.add_argument('--qlc', action='store_true', help='Flag to indicate if QLC SSDs are used. default is TLC')
     parser.add_argument('--simulation', action='store_true', help='Flag to indicate if simulation is being run')
     parser.add_argument('--dwpd', type=float, default=1, help='DWPD (Drive writes per day) of SSDs. Writes amount for cached tier if cached tier is used')
-    parser.add_argument('--single_port_ssd', action='store_true', help='Flag to indicate if single port SSDs are used. default is dual port SSDs')
-    parser.add_argument('--active_active', action='store_true', help='Flag to indicate if active-active mode is used. default is active-passive')
-
+    
     parser.add_argument('--guarnanteed_years', type=int, default=5, help='Guaranteed years of SSDs')
     parser.add_argument('--config_file', type=str, default='2tier.json', help='Graph structure file path')
     parser.add_argument('--output_file', type=str, default='results.txt', help='Output file path to save results')
     parser.add_argument('--qlc_cache', action='store_true', help='Flag to indicate if QLC SSDs are used in cache tier. default is TLC')
-    parser.add_argument('--op_ratio', type=float, default=0.07, help='Over-provisioning ratio')
-    parser.add_argument('--waf_ratio', type=float, default=0, help='Write amplification factor')
     parser.add_argument('--nprocs', type=int, default=20, help='Number of processes to use for simulation')
     parser.add_argument('--box_mttf', type=float, default=0, help='enclosure_mttf')
     parser.add_argument('--io_module_mttr', type=float, default=0, help='io_module_mttr')
     parser.add_argument('--rebuild_bw_ratio', type=float, default=0.2, help='Rebuild speed ratio')
     parser.add_argument('--no_result', action='store_true', help='Do not write result to output_file, default is writing to result file')
     parser.add_argument('--target_perf_ratio', type=float, default=0.8, help='Target performance ratio for simulation')
+    parser.add_argument('--single_port_ssd', action='store_true', help='Flag to indicate if single port SSDs are used. default is dual port SSDs')
+    parser.add_argument('--active_active', action='store_true', help='Flag to indicate if active-active mode is used. default is active-passive')
+
     args = parser.parse_args()  
     return args
 
@@ -107,19 +105,11 @@ network_l = args.network_l
 network_m = args.network_m
 network_k = args.network_k
 network_n = network_m + network_k
-op_ratio = args.op_ratio
-waf_ratio = args.waf_ratio
 
 if (n > total_ssds):
     raise ValueError('The sum of m, kvshould not exceed total_ssds')
 if ((total_ssds - cached_ssds) % (n) != 0):
     raise ValueError('total_ssds should be divisible by the sum of m, k, l')
-
-if (args.write_through):
-    if (cached_ssds == 0):
-        raise ValueError('Write through should be used with cached tier')
-    if (cached_write_ratio != 0):
-        raise ValueError('Do not use cached_write_ratio with write through')
 
 if (cached_ssds == 0 and cached_write_ratio != 0):
     cached_write_ratio = 0
@@ -139,7 +129,7 @@ if (cached_ssds > 0):
         cached_k = intra_replicas - 1
         cached_l = 0
         print ("input cached_m and cached_k are ignored, and calculated as 1 and intra_replicas - 1")
-    if ((cached_write_ratio == 0 or cached_write_ratio >= 1) and not args.write_through):
+    if ((cached_write_ratio == 0 or cached_write_ratio >= 1)):
         raise ValueError('cached_write_ratio should be between 0 and 1')
     if (cached_m + cached_k + cached_l > cached_ssds):
         raise ValueError('The sum of cached_m, cached_k should not exceed cached_ssds')
@@ -173,8 +163,6 @@ params_and_results['simulation'] = simulation
 params_and_results['dwpd'] = dwpd
 params_and_results['guaranteed_years'] = guaranteed_years
 params_and_results['dwpd_limit'] = dwpd_limit
-params_and_results['op_ratio'] = op_ratio
-params_and_results['waf_ratio'] = waf_ratio
 
 params_and_results['simulation'] = simulation
 params_and_results['ssd_read_bw'] = read_bw
@@ -190,7 +178,6 @@ else:
     params_and_results['cached_ssd_read_bw'] = tlc_read_bw
     params_and_results['cached_ssd_write_bw'] = tlc_write_bw
 
-params_and_results['write_through'] = args.write_through
 params_and_results['config_file'] = args.config_file
 params_and_results['nprocs']= args.nprocs
 params_and_results['box_mttf'] = args.box_mttf

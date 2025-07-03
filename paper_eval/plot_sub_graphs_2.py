@@ -1,6 +1,6 @@
 import argparse
 import pandas as pd
-from parser import Parser
+from csv_parser import Parser
 from sub_grouped_bar import SubGroupedBar
 from stacked_bar import StackedBar
 import matplotlib.pyplot as plt

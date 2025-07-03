@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
-from parser import Parser
+from csv_parser import Parser
 from stacked_bar_2 import StackedBar
 
 def reorder_handles(hl, nc):

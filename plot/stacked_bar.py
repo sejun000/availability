@@ -28,7 +28,11 @@ class StackedBar:
             bottoms = [b + y for b, y in zip(bottoms, y_values)]
         # x축 tick 설정: 내부 좌표를 tick 위치로, 실제 x값을 label로 (정수형으로 변환)
         ax.set_xticks(positions)
-        ax.set_xticklabels([str(int(val)) for val in actual_x], rotation=0)
+        # val 의 type이 float인데.0으로 떨어지는 경우, 정수로 변환 
+        if (isinstance(actual_x[0], float) and all(val.is_integer() for val in actual_x)):
+            actual_x = [int(val) for val in actual_x]
+        
+        ax.set_xticklabels([str(val) for val in actual_x], rotation=0)
         
         ax.set_xlabel(xlabel if xlabel else x_col, fontsize=15, labelpad=10)
         ax.set_ylabel(ylabel if ylabel else "", fontsize=15)

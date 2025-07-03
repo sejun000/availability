@@ -1,0 +1,15 @@
+name: avail
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - jupyterlab
+  - pygraphviz
+  - scipy
+  - pytz
+  - pypy
+  - matplotlib
+  - numpy
+  - tzdata
+  - pandas
+  - networkx
