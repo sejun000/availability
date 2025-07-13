@@ -133,7 +133,8 @@ def main():
         show_legend=True,
         y_min=args.y1_min,
         y_max=args.y1_max,
-        y_interval=args.y1_interval
+        y_interval=args.y1_interval,
+        legend_type="s'"
     )
 
     # 오른쪽: 시뮬레이션 데이터 – x, y2, z는 사용자 입력대로 사용

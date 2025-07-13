@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Patch, Rectangle   # 범례·색상 패치
 
 class StackedBar:
     """
@@ -10,85 +10,174 @@ class StackedBar:
     def __init__(self, df):
         self.df = df
 
-    def plot_stacked_bar(self, x_col: str, y_cols: list, y_labels: list,
-                         title: str = "", xlabel: str = "", ylabel: str = "",
-                         output_file: str = None, y_thousands: bool = False, ax=None,
-                         legend_location: str = "upper right",
-                         y_min: float = None, y_max: float = None, y_interval: float = None,
-                         show_legend: bool = True, fig: plt.Figure = None):
-        if (legend_location == None):
+    def plot_stacked_bar(
+        self,
+        x_col: str,
+        y_cols: list,
+        y_labels: list,
+        title: str = "",
+        xlabel: str = "",
+        ylabel: str = "",
+        output_file: str = None,
+        y_thousands: bool = False,
+        ax=None,
+        legend_location: str = "upper right",
+        y_min: float = None,
+        y_max: float = None,
+        y_interval: float = None,
+        show_legend: bool = True,
+        fig: plt.Figure = None,
+    ):
+        if legend_location is None:
             legend_location = "upper right"
         if ax is None:
-            fig, ax = plt.subplots(figsize=(12,6))
-        # x축 값 기준 정렬 및 내부 x 좌표 생성
-        df_sorted = self.df.sort_values(by=x_col)
-        actual_x = df_sorted[x_col].values  # 실제 x 데이터 (예: [8, 16, 32, 64, 128])
-        positions = list(range(len(actual_x)))  # 균일 간격을 위한 내부 좌표: [0,1,2,3,4]
-        bottoms = [0] * len(actual_x)
-        color_sequence = ['dodgerblue', 'orange', 'green', 'violet', 'yellow', 'purple', 'pink']
-        for i, col in enumerate(y_cols):
-            y_values = df_sorted[col].values
-            ax.bar(positions, y_values, bottom=bottoms, color=color_sequence[i % len(color_sequence)],
-                   edgecolor='black', width=0.5)
-            bottoms = [b + y for b, y in zip(bottoms, y_values)]
-        # x축 tick 설정: 내부 좌표를 tick 위치로, 실제 x값을 label로 (정수형으로 변환)
-        ax.set_xticks(positions)
-        ax.set_xticklabels([str(int(val)) for val in actual_x], rotation=0)
+            fig, ax = plt.subplots(figsize=(12, 6))
+
+        # ───────── 회색조 + 다중 해치(수평 제외) 정의 ─────────
         
+        gray_sequence = [
+            "#f0f0f0",
+            "#d9d9d9",
+            "#bdbdbd",
+            "#969696",
+            "#525252",
+            "#737373",
+            "#252525",
+        ]
+        
+        #gray_sequence = ['dodgerblue', 'orange', 'green', 'violet', 'yellow', 'purple', 'pink']
+        hatch_sequence = [
+            "",        # 무늬 없음
+            "o",       # / 대각선
+            "\\\\",    # \ 대각선
+            "|",       # 수직선
+            "x",       # X 교차
+            "/",       # 작은 원
+            ".",       # 점
+            "*",       # 별
+        ]  # 수평 '-' 는 제외
+
+        # 데이터 정렬 및 좌표 준비
+        df_sorted = self.df.sort_values(by=x_col)
+        actual_x = df_sorted[x_col].values
+        positions = list(range(len(actual_x)))
+        bottoms = [0] * len(actual_x)
+
+        # ───────── 스택 막대 그리기 ─────────
+        for i, col in enumerate(y_cols):
+            y_vals = df_sorted[col].values
+            ax.bar(
+                positions,
+                y_vals,
+                bottom=bottoms,
+                color=gray_sequence[i % len(gray_sequence)],
+                hatch=hatch_sequence[i % len(hatch_sequence)],
+                edgecolor="black",
+                width=0.5,
+            )
+            bottoms = [b + y for b, y in zip(bottoms, y_vals)]
+
+        # x축 설정
+        ax.set_xticks(positions)
+        try:
+            ax.set_xticklabels([str(int(v)) for v in actual_x], rotation=0)
+        except Exception:
+            ax.set_xticklabels([str(v) for v in actual_x], rotation=0)
+
+        # 축 라벨·스타일
         ax.set_xlabel(xlabel if xlabel else x_col, fontsize=26, labelpad=10)
         ax.set_ylabel(ylabel if ylabel else "", fontsize=26)
-        ax.tick_params(axis='x', which='both', length=0, pad=10, labelsize=24)
-        ax.tick_params(axis='y', labelsize=24)
+        ax.tick_params(axis="x", which="both", length=0, pad=10, labelsize=24)
+        ax.tick_params(axis="y", labelsize=24)
         if y_thousands:
-            ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, pos: f'{int(x):,}'))
-            
-        # legend 처리: show_legend True면 local legend 표시, False면 legend info만 반환
+            ax.yaxis.set_major_formatter(
+                mtick.FuncFormatter(lambda x, pos: f"{int(x):,}")
+            )
+
+        # 범례 처리
+        legend_handles = [
+            Patch(
+                facecolor=gray_sequence[i % len(gray_sequence)],
+                edgecolor="black",
+                hatch=hatch_sequence[i % len(hatch_sequence)],
+            )
+            for i in range(len(y_labels))
+        ]
         if show_legend:
-            leg = ax.legend(y_labels, loc=legend_location, frameon=True, edgecolor='black', fontsize=26)
+            leg = ax.legend(
+                legend_handles,
+                y_labels,
+                loc=legend_location,
+                frameon=True,
+                edgecolor="black",
+                fontsize=26,
+            )
             leg.get_frame().set_alpha(1)
             legend_info = (leg.get_handles(), y_labels)
         else:
-            # local legend를 그리지 않고, 색상 정보를 이용하여 legend info 생성
-            legend_info = ([Rectangle((0,0),1,1, fc=color_sequence[i % len(color_sequence)], edgecolor='black')
-                             for i in range(len(y_labels))], y_labels)
-            
+            legend_info = (
+                [
+                    Rectangle(
+                        (0, 0),
+                        1,
+                        1,
+                        fc=gray_sequence[i % len(gray_sequence)],
+                        hatch=hatch_sequence[i % len(hatch_sequence)],
+                        edgecolor="black",
+                    )
+                    for i in range(len(y_labels))
+                ],
+                y_labels,
+            )
+
+        # 제목
         if title:
-            ax.text(0.5, -0.37, title, transform=ax.transAxes,
-                    ha='center', fontsize=26, clip_on=False)
+            ax.text(
+                0.5,
+                -0.37,
+                title,
+                transform=ax.transAxes,
+                ha="center",
+                fontsize=26,
+                clip_on=False,
+            )
             plt.subplots_adjust(bottom=0.3)
+
+        # 그리드·눈금 등
         ax.set_frame_on(True)
         ax.set_axisbelow(True)
-        ax.grid(axis='y', linestyle='--', linewidth=1, color='black')
+        ax.grid(axis="y", linestyle="--", linewidth=1, color="black")
+
         if y_min is not None or y_max is not None:
             ax.set_ylim(bottom=y_min, top=y_max)
         if y_interval is not None:
             from matplotlib.ticker import MultipleLocator
+
             ax.yaxis.set_major_locator(MultipleLocator(y_interval))
+
         if y_max is not None:
             effective_ymin = y_min if y_min is not None else 0
-            offset = 0.03 * (y_max - effective_ymin)  # 약간 띄우는 오프셋
+            offset = 0.03 * (y_max - effective_ymin)
             for patch in ax.patches:
                 bar_top = patch.get_y() + patch.get_height()
                 if bar_top > y_max:
-                    bar_center_x = patch.get_x() + patch.get_width() / 2
-                    text_str = f"{int(round(bar_top))}"
-                    ax.text(bar_center_x, y_max + offset, text_str,
-                            ha='center', va='bottom', fontsize=10, color='black', clip_on=False)
+                    ax.text(
+                        patch.get_x() + patch.get_width() / 2,
+                        y_max + offset,
+                        f"{int(round(bar_top))}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=10,
+                        color="black",
+                        clip_on=False,
+                    )
 
+        # 상·하단 그리드 숨김
         fig.canvas.draw()
-
         ymin, ymax = ax.get_ylim()
-
-        # get_ygridlines()로 모든 가로 grid line 순회
         for line in ax.get_ygridlines():
-            # x_data, y_data 형태로 반환 (horizontal line이면 y_data가 같은 값 2개)
-            x_data, y_data = line.get_data()
-            #print (y_data, ymin, ymax)
-            # 혹은 line.get_ydata() 만으로도 확인 가능
-            
-            # 두 점의 y좌표가 모두 ymin(또는 ymax)와 같은 경우가 최솟값/최댓값을 그리는 line
-            if (y_data[0] <= ymin + 1e-8):
+            _, y_data = line.get_data()
+            if y_data[0] <= ymin + 1e-8 or y_data[0] >= ymax - 1e-8:
                 line.set_visible(False)
-            elif (y_data[0] >= ymax - 1e-8):
-                line.set_visible(False)
+
         return legend_info

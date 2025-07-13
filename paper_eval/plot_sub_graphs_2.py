@@ -35,6 +35,8 @@ def main():
     parser.add_argument("--y2_interval", type=float, default=None, help="Y-axis tick interval")
     parser.add_argument("--legend_location1", default="upper right", help="Location of the legend (default: 'upper right')")
     parser.add_argument("--legend_location2", default="upper right", help="Location of the legend (default: 'upper right')")
+    parser.add_argument("--legend_type1", type=str, default="equal", help="legend type")
+    parser.add_argument("--legend_labels1", type=str, default=None, help="Comma-separated legend labels for z_expr (if grouping is used)")
 
 
     args = parser.parse_args()
@@ -59,10 +61,14 @@ def main():
         df["x1"] = df[args.x1_expr]
 
     try:
-        df["x2"] = df.eval(args.x2_expr)
+        df["x2"] = df.eval(args.x2_expr, engine="python")
     except Exception as e:
-        print(f"Error evaluating x_expr '{args.x2_expr}': {e}")
-        df["x2"] = df[args.x2_expr]
+        try:
+            df["x2"] = df.apply(lambda r: eval(args.x2_expr, {}, r.to_dict()), axis=1)
+        except Exception as e:
+            print(f"Error evaluating x_expr '{args.x2_expr}': {e}")
+            df["x2"] = df[args.x2_expr]
+
     try:
         df["y1"] = df.eval(args.y1_expr)
     except Exception as e:
@@ -83,10 +89,13 @@ def main():
 
     if args.z_expr:
         try:
-            df["z"] = df.eval(args.z_expr)
+            df["z"] = df.eval(args.z_expr, engine="python")
         except Exception as e:
-            print(f"Error evaluating z_expr '{args.z_expr}': {e}")
-            df["z"] = df[args.z_expr]
+            try:
+                df["z"] = df.apply(lambda r: eval(args.z_expr, {}, r.to_dict()), axis=1)
+            except Exception as e:
+                print(f"Error evaluating z_expr '{args.z_expr}': {e}")
+                df["z"] = df[args.z_expr]
     else:
         df["z"] = None
     
@@ -120,7 +129,9 @@ def main():
         legend_location=args.legend_location1,
         y_min=args.y1_min,         # 추가
         y_max=args.y1_max,         # 추가
-        y_interval=args.y1_interval  # 추가
+        y_interval=args.y1_interval,  # 추가
+        legend_type = args.legend_type1,
+        ext_legend_labels = args.legend_labels1.split(",") if args.legend_labels1 else None
     )
     if args.filter2_expr:
         try:

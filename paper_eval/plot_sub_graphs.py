@@ -104,7 +104,8 @@ def main():
         show_legend=True,
         y_min=args.y1_min,         # 추가
         y_max=args.y1_max,         # 추가
-        y_interval=args.y1_interval  # 추가
+        y_interval=args.y1_interval,  # 추가
+        legend_type=args.legend_type
     )
 
     # 오른쪽 서브플롯: y2 데이터 (범례는 표시하지 않음)
@@ -122,7 +123,8 @@ def main():
         show_legend=False,
         y_min=args.y2_min,         # 추가
         y_max=args.y2_max,         # 추가
-        y_interval=args.y2_interval  # 추가
+        y_interval=args.y2_interval,  # 추가
+        legend_type=args.legend_type
     )
 
     # z 그룹 범례가 있을 경우, 전역 범례를 상단 중앙에 테두리 없이 추가
